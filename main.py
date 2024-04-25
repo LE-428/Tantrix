@@ -1,51 +1,69 @@
-# import numpy as np
+import numpy as np
 import random as random
 
-import math
+# import math
 import matplotlib.pyplot as plt
 
+
+# Koordinaten von dem System der Sechseckmittelpunkte umrechnen in kartesisch
+def getCoordinates(pos):
+    hex_coords = np.array([[0, 0], [-1, -1], [0, -1], [1, 0], [1, 1], [0, 1], [-1, 0]])
+    coords = hex_coords[pos]
+
+    def rotation_matrix(theta):
+        cos_theta = np.cos(theta)
+        sin_theta = np.sin(theta)
+        return np.array([[cos_theta, -sin_theta],
+                         [sin_theta, cos_theta]])
+
+    b1 = np.eye(2)
+    hex_matrix = np.array([rotation_matrix(np.pi / 6) @ b1[:, 0], rotation_matrix(np.pi / 3) @ b1[:, 1]])
+    hex_matrix = np.transpose(hex_matrix)
+
+    return hex_matrix @ coords
+
+
+# Die Lösung plotten, jedes Tile in der Lösung wird betrachtet und einzeln
+# geplottet nach der Orientierung und den Farbcodes
 def draw_solution(solution, tiles):
     fig, ax = plt.subplots(figsize=(8, 6))
 
     # Größe und Position der Steine festlegen
-    tile_size = 1.0
-    positions = [(0, 0), (0.75, 1.3), (2.25, 1.3), (3, 0), (2.25, -1.3), (0.75, -1.3), (-0.75, -1.3)]
+    tile_size = 0.55
 
     # Für jeden Stein in der Lösung
     for i, tile_index in enumerate(solution[0]):
-        x, y = positions[i]
         tile_orientation = solution[2][i]
         tile = tiles[tile_index]
 
         # Zeichne die Vorderseite des Steins
-        draw_tile(ax, x, y, tile_size, tile_orientation, tile)
+        draw_hexagon(ax, i, tile_orientation, tile, tile_size)
 
     ax.axis('equal')
     ax.axis('off')
     plt.show()
 
-def draw_tile(ax, x, y, size, orientation, tile):
+
+def draw_hexagon(ax, position, orientation, tile, size=1.0):
     colors = {'1': 'blue', '2': 'yellow', '3': 'red'}
+    x, y = getCoordinates(position)
 
-    # Kantenverbindungen des Steins
-    connections = [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 0)]
+    angles = np.arange(- 2 / 3 * np.pi, 4 / 3 * np.pi, np.pi / 3)
+    for edge in range(0, 6):
+        x_start = x + size * np.cos(angles[edge])
+        y_start = y + size * np.sin(angles[edge])
+        x_end = x + size * np.cos(angles[(edge + 1) % 6])
+        y_end = y + size * np.sin(angles[(edge + 1) % 6])
 
-    # Orientierung des Steins anpassen
-    if orientation > 0:
-        tile = tile[-orientation:] + tile[:-orientation]
+        color = colors[str(getColor(tile, edge, orientation))]
 
-    # Steinkanten zeichnen
-    for edge_index, color_code in enumerate(tile):
-        start_x, start_y = x + size * 0.5 * math.cos(math.pi / 3 * edge_index), y + size * 0.5 * math.sin(math.pi / 3 * edge_index)
-        end_x, end_y = x + size * 0.5 * math.cos(math.pi / 3 * (edge_index + 1)), y + size * 0.5 * math.sin(math.pi / 3 * (edge_index + 1))
+        ax.plot([x_start, x_end], [y_start, y_end], color=color, linewidth=3)
 
-        color = colors[color_code]
-        ax.plot([start_x, end_x], [start_y, end_y], color=color, linewidth=3)
 
-# # Beispielaufruf
-solution = [[0, 2, 4, 7, 8, 11, 12], ['112323', '131322', '131223', '112233', '121323', '221331', '113322'], [4, 1, 1, 3, 2, 5, 4]]
-tiles = ["112323", "212313", "131322", "112332", "131223", "121332", "113232", "112233", "121323", "113223", "131232", "221331", "113322", "121233"]
-draw_solution(solution, tiles)
+# #  Beispielaufruf
+# solution = [[0, 2, 4, 7, 8, 11, 12], ['112323', '131322', '131223', '112233', '121323', '221331', '113322'], [4, 1, 1, 3, 2, 5, 4]]
+# tiles = ["112323", "212313", "131322", "112332", "131223", "121332", "113232", "112233", "121323", "113223", "131232", "221331", "113322", "121233"]
+# draw_solution(solution, tiles)
 
 
 tiles = ["112323", "212313",  # Die Spielsteine werden codiert mit der Rhflg aus der Känguru-Anleitung
@@ -56,17 +74,18 @@ tiles = ["112323", "212313",  # Die Spielsteine werden codiert mit der Rhflg aus
          "131232", "221331",
          "113322", "121233"]  # jeweils zwei Steine in einer Reihe sind in der Känguru-Version auf einem Stein
 
-
 tiles_front_back = [[0] * 7 for _ in range(2)]  # Liste der Spielsteine mit Vorder- und Rückseite in jeweils
 tiles_front_back[0] = [tiles[2 * i] for i in range(7)]  # einer Zeile
 tiles_front_back[1] = [tiles[2 * i + 1] for i in range(7)]
 
 
-
+#  Die Farbe einer Kante eines Steins ausgeben als int mit obiger Codierung
 def getColor(tile, edge, orientation):
     return int(tile[(edge + orientation) % 6])
 
 
+# Zufällige Lösung ausgeben, falls nur Vorder- oder Rückseite der Steine verwendet werden soll
+# dann tile_bool auf 1 setzen
 def randomSol(all_tiles, tile_bool=0):
     sol_arr = [[0] * 7 for _ in range(3)]
     if tile_bool == 0:
@@ -79,7 +98,8 @@ def randomSol(all_tiles, tile_bool=0):
     return sol_arr
 
 
-
+# Fitnessfunktion, welche die Anzahl der Fehler, also nicht übereinstimmender Farben an der Kanten
+# der Steine zählt
 def objective(curr_sol):
     mismatches = 0
     for i in range(0, 7):  # jeden Stein der Blume einmal betrachten
@@ -99,8 +119,6 @@ def objective(curr_sol):
     return mismatches
 
 
-
-
 def main():
     # np.set_printoptions(suppress=True, precision=5)
     # color = getColor('212313', 5, 3)
@@ -108,13 +126,15 @@ def main():
     # print(type(color))
     current_score = 12
     current_solution = []
-    while current_score > 3:
+    while current_score > 1:
         current_solution = randomSol(tiles, 1)
         print(current_solution)
         print("Value of the objective function of the current solution: \n")
         current_score = objective(current_solution)
         print(current_score)
-    # draw_solution(current_solution, tiles)
+    draw_solution(current_solution, tiles)
+    print(getCoordinates(2))
+
 
 if __name__ == "__main__":
     main()
