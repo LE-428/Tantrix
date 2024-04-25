@@ -44,7 +44,7 @@ def draw_solution(solution, tiles):
     plt.show()
 
 
-def draw_hexagon(ax, position, orientation, tile, size=1.0):
+def draw_hexagon(ax, position, orientation, tile, size=0.55):
     colors = {'1': 'blue', '2': 'yellow', '3': 'red'}
     x, y = getCoordinates(position)
 
@@ -58,12 +58,6 @@ def draw_hexagon(ax, position, orientation, tile, size=1.0):
         color = colors[str(getColor(tile, edge, orientation))]
 
         ax.plot([x_start, x_end], [y_start, y_end], color=color, linewidth=3)
-
-
-# #  Beispielaufruf
-# solution = [[0, 2, 4, 7, 8, 11, 12], ['112323', '131322', '131223', '112233', '121323', '221331', '113322'], [4, 1, 1, 3, 2, 5, 4]]
-# tiles = ["112323", "212313", "131322", "112332", "131223", "121332", "113232", "112233", "121323", "113223", "131232", "221331", "113322", "121233"]
-# draw_solution(solution, tiles)
 
 
 tiles = ["112323", "212313",  # Die Spielsteine werden codiert mit der Rhflg aus der Känguru-Anleitung
@@ -88,6 +82,7 @@ def getColor(tile, edge, orientation):
 # dann tile_bool auf 1 setzen
 def randomSol(all_tiles, tile_bool=0):
     sol_arr = [[0] * 7 for _ in range(3)]
+    tiles_vec = []
     if tile_bool == 0:
         tiles_vec = random.sample([*range(0, 14)], k=7)
     elif tile_bool == 1:
@@ -110,10 +105,10 @@ def objective(curr_sol):
                     mismatches += 1
         elif i < 6:
             if getColor(curr_sol[1][i], (i + 1) % 6, curr_sol[2][i]) != getColor(curr_sol[1][i + 1],
-                                                                                 (i + 3) % 6, curr_sol[2][i + 1]):
+                                                                                 (i + 4) % 6, curr_sol[2][i + 1]):
                 mismatches += 1
         else:  # i = 6
-            if getColor(curr_sol[1][i], (i + 1) % 6, curr_sol[2][i]) != getColor(curr_sol[1][1], (i + 3) % 6,
+            if getColor(curr_sol[1][i], (i + 1) % 6, curr_sol[2][i]) != getColor(curr_sol[1][1], (i + 4) % 6,
                                                                                  curr_sol[2][1]):
                 mismatches += 1
     return mismatches
@@ -121,19 +116,18 @@ def objective(curr_sol):
 
 def main():
     # np.set_printoptions(suppress=True, precision=5)
-    # color = getColor('212313', 5, 3)
-    # print(color)
-    # print(type(color))
+    solution = [[0, 2, 4, 7, 8, 11, 12], ['112323', '131322', '131223', '112233', '121323', '221331', '113322'], [4, 1, 1, 3, 2, 5, 4]]
     current_score = 12
     current_solution = []
-    while current_score > 1:
+    while current_score > 0:
         current_solution = randomSol(tiles, 1)
         print(current_solution)
         print("Value of the objective function of the current solution: \n")
         current_score = objective(current_solution)
         print(current_score)
     draw_solution(current_solution, tiles)
-    print(getCoordinates(2))
+    # draw_solution(solution, tiles)
+    # print(objective(solution))
 
 
 if __name__ == "__main__":
