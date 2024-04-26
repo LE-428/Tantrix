@@ -1,8 +1,26 @@
 import numpy as np
 import random as random
+from itertools import combinations
 
 # import math
 import matplotlib.pyplot as plt
+
+
+def d2b(decimal, leading_zero_digit=0):
+    integer = decimal
+    result = []
+    while integer > 0:
+        if integer % 2 == 1:
+            result.append("1")
+            integer = (integer - 1) / 2
+        else:
+            result.append("0")
+            integer = integer / 2
+    if len(result) < leading_zero_digit:
+        for i in range(leading_zero_digit - len(result)):
+            result.append("0")
+    result = result[::-1]
+    return ''.join(result)
 
 
 # Koordinaten von dem System der Sechseckmittelpunkte umrechnen in kartesisch
@@ -25,7 +43,7 @@ def getCoordinates(pos):
 
 # Die Lösung plotten, jedes Tile in der Lösung wird betrachtet und einzeln
 # geplottet nach der Orientierung und den Farbcodes
-def draw_solution(solution, tiles):
+def draw_solution(solution, all_tiles):
     fig, ax = plt.subplots(figsize=(8, 6))
 
     # Größe und Position der Steine festlegen
@@ -34,7 +52,7 @@ def draw_solution(solution, tiles):
     # Für jeden Stein in der Lösung
     for i, tile_index in enumerate(solution[0]):
         tile_orientation = solution[2][i]
-        tile = tiles[tile_index]
+        tile = all_tiles[tile_index]
 
         # Zeichne die Vorderseite des Steins
         draw_hexagon(ax, i, tile_orientation, tile, tile_size)
@@ -71,6 +89,23 @@ tiles = ["112323", "212313",  # Die Spielsteine werden codiert mit der Rhflg aus
 tiles_front_back = [[0] * 7 for _ in range(2)]  # Liste der Spielsteine mit Vorder- und Rückseite in jeweils
 tiles_front_back[0] = [tiles[2 * i] for i in range(7)]  # einer Zeile
 tiles_front_back[1] = [tiles[2 * i + 1] for i in range(7)]
+tiles_front_back_indices = [[0] * 7 for _ in range(2)]
+tiles_front_back_indices[0] = [2 * i for i in range(7)]
+tiles_front_back_indices[1] = [2 * i + 1 for i in range(7)]
+
+# Erstellen Sie eine Liste aller Kombinationen von 7 Elementen aus dem Vektor mit den Einträgen von 0 bis 13
+# Codierung für alle möglichen Puzzles, mathematisch 14C7
+all_puzzles = list(combinations([*range(14)], 7))
+
+
+# Von einer Variante der 7 Steine mit Vorder- und Rückseite die 2^7 = 128 Möglichkeiten,
+# die Seiten der Steine zu kombinieren ausgeben als Vektoren mit den Steinenummern
+def get_puzzles(tile_combo):
+    output_puzzles = []
+    for i in range(128):
+        logical = d2b(i, 7)
+        output_puzzles.append([tile_combo[int(logical[k])][k] for k in range(7)])
+    return output_puzzles
 
 
 #  Die Farbe einer Kante eines Steins ausgeben als int mit obiger Codierung
@@ -89,7 +124,7 @@ def randomSol(all_tiles, tile_bool=0):
         tiles_vec = [(i * 2) + random.randint(0, 1) for i in range(7)]
     sol_arr[0] = tiles_vec
     sol_arr[1] = [all_tiles[i] for i in tiles_vec]
-    sol_arr[2] = [int(random.uniform(0, 6)) for i in range(1, 8)]
+    sol_arr[2] = [int(random.uniform(0, 6)) for _ in range(1, 8)]
     return sol_arr
 
 
@@ -116,7 +151,8 @@ def objective(curr_sol):
 
 def main():
     # np.set_printoptions(suppress=True, precision=5)
-    solution = [[0, 2, 4, 7, 8, 11, 12], ['112323', '131322', '131223', '112233', '121323', '221331', '113322'], [4, 1, 1, 3, 2, 5, 4]]
+    solution = [[1, 2, 5, 7, 9, 11, 12],
+                ['212313', '131322', '121332', '112233', '113223', '221331', '113322'], [0, 2, 2, 3, 5, 4, 0]]
     current_score = 12
     current_solution = []
     while current_score > 0:
