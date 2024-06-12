@@ -1,13 +1,12 @@
 import time
-
 import numpy as np
 import random as random
 from itertools import combinations
-from itertools import groupby
 import copy
 import datetime
+import multiprocessing
 
-import math
+# import math
 import matplotlib.pyplot as plt
 
 # to do: allgemeine Lösungen zulassen, funktionen verallgemeinern, alle 14C7 Blumen lösen
@@ -122,99 +121,18 @@ def generate_tiles(tile_set):
     return tiles_compl
 
 
-# def gen_cand(curr,
-#              swap_and_rotate=1):  # DAS HIER war MIES VERBUGGT!!!!!!; [[38, 41, 17, 2, 54, 32, 36], ['131434', 5, '332442', 0, 3, 3, 3], [0, 3, 3, 1, 0, 0, 0]]
-#     """
-#     Generiere einen Kandidaten für allgemeine Formen von Lösungen
-#     Dieselben Tiles vertauschen und rotieren? (swap_and_rotate=1 setzen, liefert bessere Ergebnisse)
-#     :param curr: Eingangslösung
-#     :param swap_and_rotate: boolean, default True
-#     :return: Ausgangslösung
-#     """  # Positionen der Steine verändern, allgemene Lösungen, längste Linie einer Farbe bestimmen, Fitnessfkt anpassen
-#     cand = copy.deepcopy(curr)  # Umkopieren, da sonst die current Lösung verändert wird
-#     n_tiles = len(cand[0])
-#     n_swaps = np.random.randint(0, n_tiles + 1)  # Anzahl der Vertauschungen
-#     standard = 0
-#     if len(cand) == 3:
-#         cand.insert(0, [*range(n_tiles)])
-#         standard = 1
-#     if swap_and_rotate:
-#         n_rotations = n_swaps
-#     else:
-#         n_rotations = np.random.randint(0, n_tiles + 1)  # Anzahl der Rotationen
-#     swap_indices = random.sample([*range(0, n_tiles)], k=n_swaps)  # Indizes der zu vertauschenden Steine,
-#     # für Blume ([*range(0, 7)], k=n_swaps)
-#     swap_indices_permutation = np.random.permutation(swap_indices)
-#     swap_tiles_perm = [cand[1][k] for k in swap_indices_permutation]  # Permutation der betroffenen Steine
-#     rotations = np.random.choice(6, n_rotations)  # Rotationen der Steine festlegen
-#     if swap_and_rotate:
-#         rotation_indices = swap_indices
-#         for z in range(len(swap_indices)):
-#             if swap_indices[z] == swap_indices_permutation[z] and len(swap_indices) > 1:  # Falls nicht vertauscht wird
-#                 # , wird wenigstens rotiert
-#                 rotations[z] = 0
-#     else:
-#         rotation_indices = random.sample([*range(0, n_tiles)], k=n_rotations)  # Indizes der zu rotierenden Steine
-#     tiles_copy = copy.deepcopy(cand[2])
-#     for k, rot in enumerate(rotation_indices):
-#         cand[3][rot] = (cand[3][rot] + rotations[k]) % 6
-#     for j, swap in enumerate(swap_indices):
-#         cand[1][swap] = swap_tiles_perm[j]
-#         cand[2][swap] = tiles_copy[swap_indices_permutation[j]]
-#     # print(f"Anzahl der Vertauschungen/Rotationen: {n_swaps}, {n_rotations}")
-#     if standard:
-#         return cand[1:]
-#     return cand
-
-
-def gen_cand_morph(curr, swap_and_rotate=1, morphing=0):
+def gen_cand(curr, swap_and_rotate=1):  # DAS HIER IST MIES VERBUGGT!!!!!!; [[38, 41, 17, 2, 54, 32, 36], ['131434', 5, '332442', 0, 3, 3, 3], [0, 3, 3, 1, 0, 0, 0]]
     """
     Generiere einen Kandidaten für allgemeine Formen von Lösungen
     Dieselben Tiles vertauschen und rotieren? (swap_and_rotate=1 setzen, liefert bessere Ergebnisse)
     :param curr: Eingangslösung
     :param swap_and_rotate: boolean, default True
-    :param morphing: Form der Lösung verändern, default False 
     :return: Ausgangslösung
-    """  # Positionen der Steine verändern, allgemeine Lösungen, längste Linie einer Farbe bestimmen, Fitnessfkt anpassen
-
-    def sort_neighbors(zippo):
-        zippo = [el for el in zippo if el[0] != 0]  # Stein auf Feld 0 herausnehmen, dieser soll immer fix bleiben
-        # Sortieren der gezippten Liste basierend auf den Elementen der zweiten Elemente in absteigender Reihenfolge
-        sorted_zippo = sorted(zippo, key=lambda x: x[1], reverse=True)
-        return sorted_zippo
-
-    def update_solution(sol):
-        out_zippo, nbr_zippo = get_outer_fields(sol)
-        out_zippo = sort_neighbors(out_zippo)  # äußere Felder mit Anzahl an nicht-verbundenen Kanten
-        nbr_zippo = sort_neighbors(nbr_zippo)
-        return out_zippo, nbr_zippo
-
-    def shuffle_equal_tiles(zippo):
-        grouped = {u: list(v) for u, v in groupby(zippo, key=lambda x: x[1])}
-        # Permutiere die Tupel innerhalb jeder Gruppe
-        for u in grouped:
-            random.shuffle(grouped[u])
-        # Füge die permutierten Gruppen wieder zusammen, wobei die Reihenfolge der Gruppen beibehalten wird
-        result = [item for sublist in grouped.values() for item in sublist]
-        return result
-
+    """
     cand = copy.deepcopy(curr)  # Umkopieren, da sonst die current Lösung verändert wird
     n_tiles = len(cand[0])
     n_swaps = np.random.randint(0, n_tiles + 1)  # Anzahl der Vertauschungen
     standard = 0
-    if morphing:  # Felder nach freien Nachbarn absteigend ordnen, dann Zufallszahl n_shifts ziehen, die ersten n_shift
-        # Felder verwenden und verschieben, das neue Feld aus den nbrs (freien Feldern löschen), Feld 0 nicht shiften
-        out_zip, nbr_zip = update_solution(cand)
-        n_shifts = np.random.randint(0, len(out_zip))  # Anzahl der Verschiebungen von Steinen
-        for k in range(n_shifts):  # die Listen dann updaten? mit get_neigbor und Vergleich mit nbr
-            old_field = out_zip[k][0]  # Feld, welches aus der Lösung genommen und geändert wird
-            old_index = cand[0].index(old_field)  # Index des alten Feldes in der Lösung
-            # temp_sol = [sol[:old_index] + sol[old_index + 1:] for sol in cand]  # ohne altes Feld betrachten
-            # _, temp_nbr_zip = update_solution(temp_sol)
-            new_field = nbr_zip[k][0]  # temp_nbr_zip
-            cand[0][old_index] = new_field  # Feld verändern
-            out_zip, nbr_zip = update_solution(cand)
-            [out_zip, nbr_zip] = [shuffle_equal_tiles(out_zip), shuffle_equal_tiles(nbr_zip)]
     if len(cand) == 3:
         cand.insert(0, [*range(n_tiles)])
         standard = 1
@@ -230,8 +148,8 @@ def gen_cand_morph(curr, swap_and_rotate=1, morphing=0):
     if swap_and_rotate:
         rotation_indices = swap_indices
         for z in range(len(swap_indices)):
-            if swap_indices[z] == swap_indices_permutation[z] and len(swap_indices) > 1:  # Falls Stein auf sich selbst
-                # abgebildet wird, und mehr als 1 Stein vertauscht wird, wird dieser Stein nicht rotiert, sonst schon
+            if swap_indices[z] == swap_indices_permutation[z] and len(swap_indices) > 1:  # Falls nicht vertauscht wird
+                # , wird wenigstens rotiert
                 rotations[z] = 0
     else:
         rotation_indices = random.sample([*range(0, n_tiles)], k=n_rotations)  # Indizes der zu rotierenden Steine
@@ -247,7 +165,7 @@ def gen_cand_morph(curr, swap_and_rotate=1, morphing=0):
     return cand
 
 
-def rotate_sol(sol, n_rotations=1):  # bei allg. Lsg.: Ringe um den Ursprung verwenden
+def rotate_sol(sol, n_rotations=1):
     """
     Eine eingegebene Lösung wird um eine Position im UZS rotiert
     :param n_rotations: Anzahl der Rotationen, im UZS falls > 0, gegen UZS falls < 0, default 1
@@ -377,8 +295,10 @@ def get_coords_from_pos(pos):
     while total_positions < pos:
         ring += 1
         total_positions += 6 * ring
+
     pos_in_ring = pos - (total_positions - 6 * ring) - 1
     side_length = ring
+
     coords = np.array([-ring, -ring])
     side = pos_in_ring // side_length
     offset = pos_in_ring % side_length
@@ -387,6 +307,7 @@ def get_coords_from_pos(pos):
         coords += step(side_counter, side_length)
         side_counter += 1
     coords += step(side, offset)
+
     return coords
 
 
@@ -448,9 +369,9 @@ def get_neighbor(field_number, edge):
     :param edge: die Kante des betrachteten Feldes, welche eine gemeinsame Kante mit den Nachbarn ist
     :return: die Postion des Nachbarn in der definierten Systematik
     """
-    # t1 = time.perf_counter()
+    t1 = time.perf_counter()
     tile_coords = get_coords_from_pos(field_number)
-    # t2 = time.perf_counter()
+    t2 = time.perf_counter()
     direction_map = {
         0: np.array([-1, -1]),
         1: np.array([0, -1]),
@@ -461,7 +382,7 @@ def get_neighbor(field_number, edge):
     }
     target_coords = tile_coords + direction_map[edge]
     nbr = get_pos_from_coords(target_coords)
-    # t3 = time.perf_counter()
+    t3 = time.perf_counter()
     # print(f"pos2coords: {t2 - t1}, coords2pos: {t3 - t2}")
     return nbr
 
@@ -486,6 +407,7 @@ def getCoordinates(pos):
     b1 = np.eye(2)
     hex_matrix = np.array([rotation_matrix(np.pi / 6) @ b1[:, 0], rotation_matrix(np.pi / 3) @ b1[:, 1]])
     hex_matrix = np.transpose(hex_matrix)
+
     return hex_matrix @ coords
 
 
@@ -523,14 +445,17 @@ def draw_sol_gen(solution):
     plot_size = np.round(np.log2(len(solution[0])) + 3)  # Die Anzahl der hinzukommmenden Steine pro Umlauf ist
     # ca. die Anzahl aller vorherigen Steine
     fig, ax = plt.subplots(figsize=(8 / 6 * plot_size, plot_size))
+
     # Größe und Position der Steine festlegen
     tile_size = 0.55
+
     # Für jeden Stein in der Lösung
     for index, tile in enumerate(solution[2]):
         tile_pos = solution[0][index]
         tile_orientation = solution[3][index]
         # Zeichne die Kanten des Steins
         draw_hexagon(ax, tile_pos, tile_orientation, tile, tile_size)
+
     ax.axis('equal')
     ax.axis('off')
     plt.title(f"{datetime.datetime.now().time()}, {obj_gen(solution)} Fehler")
@@ -549,13 +474,16 @@ def draw_hexagon(ax, position, orientation, tile, size=0.55):
     """
     colors = {'1': 'blue', '2': 'yellow', '3': 'red', '4': 'green'}
     x, y = getCoordinates(position)
+
     angles = np.arange(- 2 / 3 * np.pi, 4 / 3 * np.pi, np.pi / 3)
     for edge in range(0, 6):
         x_start = x + size * np.cos(angles[edge])
         y_start = y + size * np.sin(angles[edge])
         x_end = x + size * np.cos(angles[(edge + 1) % 6])
         y_end = y + size * np.sin(angles[(edge + 1) % 6])
+
         color = colors[str(getColor(tile, edge, orientation))]
+
         ax.plot([x_start, x_end], [y_start, y_end], color=color, linewidth=3)
 
 
@@ -613,7 +541,6 @@ def gen_random_sol(all_tiles, n_tiles=7, kangaroo=1, sample=0, ascending=0, rand
         if rnd:
             return random.sample([*range(0, 56)], k=num)
         return random.sample([*range(0, 56)], k=num)
-
     tiles_vec = get_tiles(num=n_tiles, kang=kangaroo, smpl=sample, asc=ascending, rnd=randomness)
     sol_arr[0] = [*range(n_tiles)]  # die Spielfelder werden nach der Systematik aufsteigend verwendet, für n_tiles=19
     # werden zwei Umläufe um die Mitte erreicht
@@ -625,7 +552,7 @@ def gen_random_sol(all_tiles, n_tiles=7, kangaroo=1, sample=0, ascending=0, rand
     return sol_arr
 
 
-def gen_start_sol(combo, all_tiles, standard=0):
+def create_start_sol(combo, all_tiles, standard=0):
     """
     Eine Startlösung generieren ausgehend von einer beliebigen Kombination der Spielsteine
     :param standard: Lösung ohne Einträge der Felder generieren
@@ -635,9 +562,9 @@ def gen_start_sol(combo, all_tiles, standard=0):
     """
     sol = [[] * len(combo) for _ in range(4)]
     sol[0] = [*range(0, len(combo))]
-    sol[1] = list(np.random.permutation(combo))
-    sol[2] = [all_tiles[k] for k in sol[1]]
-    sol[3] = [int(random.uniform(0, 6)) for _ in range(len(combo))]
+    sol[1] = list(combo)
+    sol[2] = [all_tiles[k] for k in combo]
+    sol[3] = [int(random.uniform(0, 6)) for _ in range(1, 8)]
     if standard:
         return sol[1:]
     return sol
@@ -668,14 +595,14 @@ def objective(sol):
     return mismatches
 
 
-def obj_gen(sol):  # die Kompaktheit der Lösung eingehen lassen, Ringe um 0 mit aufsteigenden Straftermen
+def obj_gen(sol):
     """
     Objective-Funktion für verallgemeinerte Lösungen (nicht nur für Blumen), gibt die Anzahl der Fehler an
     (Vorgehen: für jedes Tile die 6 Nachbarn betrachten und die Fehler zählen), langsamer als im Blumen-Fall
     :param sol: Lösung
     :return: Fehleranzahl
     """
-    # t1 = time.perf_counter()
+    t1 = time.perf_counter()
     mismatches = 0
     # Caches für Positionen und Farben
     tile_positions = {sol[0][index]: index for index in range(len(sol[0]))}
@@ -684,52 +611,24 @@ def obj_gen(sol):  # die Kompaktheit der Lösung eingehen lassen, Ringe um 0 mit
         for index in range(len(sol[0]))
     ]
     visited_edges = set()  # Set für besuchte Kantenpaare
-    # t2 = time.perf_counter()
+    t2 = time.perf_counter()
+
     # Fehler zählen
     for index in range(len(sol[0])):
         for edge in range(6):
             if (index, edge) not in visited_edges:
-                # t3 = time.perf_counter()
+                t3 = time.perf_counter()
                 neighbor_field = get_neighbor(sol[0][index], edge)
-                # t4 = time.perf_counter()
+                t4 = time.perf_counter()
                 if neighbor_field in tile_positions:
                     neighbor_index = tile_positions[neighbor_field]
                     if tile_colors[index][edge] != tile_colors[neighbor_index][(edge + 3) % 6]:
                         mismatches += 1
                     visited_edges.add((index, edge))
                     visited_edges.add((neighbor_index, (edge + 3) % 6))
-                # t5 = time.perf_counter()
+                t5 = time.perf_counter()
                 # print(f"init: {t2 - t1}, neigh: {t4 - t3}, rest_loop: {t5 - t4}")
     return mismatches
-
-
-def get_outer_fields(sol):  # fehlt: Berechnung Anzahl Berührpunkte der angrenzenden Felder mit der aktuellen Lösung
-    outer_fields = []  # Aktualisierung nach jedem Shift?
-    nbr_fields = []
-    outer_open_edges = []
-    nbr_closed_edges = []
-    out_zip = list(zip(outer_fields, outer_open_edges))
-    nbr_zip = list(zip(nbr_fields, nbr_closed_edges))
-    for field in sol[0]:
-        open_edges_counter = 0
-        for edge in range(6):
-            nbr = get_neighbor(field, edge)
-            if nbr not in sol[0]:
-                if field not in outer_fields:
-                    outer_fields.append(field)
-                if nbr not in nbr_fields:
-                    nbr_fields.append(nbr)
-                    nbr_closed_edges.append(1)
-                else:
-                    index = nbr_fields.index(nbr)
-                    nbr_closed_edges[index] += 1
-                # break
-                open_edges_counter += 1
-        outer_open_edges.append(open_edges_counter)
-        outer_open_edges = [field for field in outer_open_edges if field > 0]
-        out_zip = list(zip(outer_fields, outer_open_edges))
-        nbr_zip = list(zip(nbr_fields, nbr_closed_edges))
-    return out_zip, nbr_zip
 
 
 def plot_p_over_steps(data):
@@ -862,6 +761,7 @@ def simulated_annealing(init_sol, n_iter, temp, param=1.0, write_data=1):
         data = [[0] * n_iter for _ in range(10)]
         data[0] = [*range(n_iter)]
         data[1] = temperatures
+
     best_sol = copy.deepcopy(init_sol)  # beste Lösung, wird am Schluss ausgegeben
     best_val = objective(best_sol)
     curr_sol, curr_val = best_sol, best_val
@@ -869,7 +769,7 @@ def simulated_annealing(init_sol, n_iter, temp, param=1.0, write_data=1):
         t1 = time.perf_counter()
         if best_val == 0:
             break
-        cand_sol = gen_cand_morph(curr_sol, 1, 0)
+        cand_sol = gen_cand(curr_sol, 1)
         t2 = time.perf_counter()
         cand_val = objective(cand_sol)
         t3 = time.perf_counter()
@@ -902,14 +802,13 @@ def simulated_annealing(init_sol, n_iter, temp, param=1.0, write_data=1):
     return [best_sol, best_val, data]
 
 
-def sim_ann_gen(init_sol, n_iter: int, temp: int, param=5.0, morphing=0, write_data=1):
+def sim_ann_gen(init_sol, n_iter: int, temp: int, param=5.0, write_data=1):
     """
     Simulated annealing Algorithmus
     :param init_sol: Startlösung
     :param n_iter: Anzahl der Schritte im Algorithmus
     :param temp: Starttemperatur
     :param param: Abkühlungsparameter, sorgt dafür, dass schneller nur noch bessere Lösungen akzeptiert werden
-    :param morphing: Soll der Algorithmus versuchen, die Form der Lösung zu verändern?
     :param write_data: Sollen Daten geschrieben werden?
     :return: Data-Array mit 10 Zeilen
             [0] Anzahl der Schritte
@@ -935,13 +834,13 @@ def sim_ann_gen(init_sol, n_iter: int, temp: int, param=5.0, morphing=0, write_d
     best_val = obj_gen(best_sol)
     curr_sol, curr_val = best_sol, best_val
     for i in range(n_iter):
-        # t1 = time.perf_counter()
+        t1 = time.perf_counter()
         if best_val == 0:
             break
-        cand_sol = gen_cand_morph(curr_sol, 1, morphing)
-        # t2 = time.perf_counter()
+        cand_sol = gen_cand(curr_sol)
+        t2 = time.perf_counter()
         cand_val = obj_gen(cand_sol)
-        # t3 = time.perf_counter()
+        t3 = time.perf_counter()
         diff = cand_val - curr_val
         print(f"Iteration #{i}, Differenz cand - curr: {diff}")
         if cand_val - best_val < 0:
@@ -964,8 +863,8 @@ def sim_ann_gen(init_sol, n_iter: int, temp: int, param=5.0, morphing=0, write_d
             data[7][i] = cand_val
             data[8][i] = cand_sol
             data[9][i] = diff
-        # t4 = time.perf_counter()
-        # print(f"SIM-G: gen_cand: {t2 - t1}, obj_gen: {t3 - t2}, elapsed: {t4 - t1}")
+        t4 = time.perf_counter()
+        print(f"SIM-G: gen_cand: {t2 - t1}, obj_gen: {t3 - t2}, elapsed: {t4 - t1}")
     return [best_sol, best_val, data]
 
 
@@ -1071,7 +970,7 @@ def solve_flowers(puzzles, all_tiles, n_iter, temp, param=1.0, write_file=0, fil
         opt_val = 1
         opt_sol = []
         datastream = []
-        starting_sol = gen_start_sol(list(puzzle), all_tiles, 1)
+        starting_sol = create_start_sol(list(puzzle), all_tiles, 1)
         while opt_val > 0 and attempts < 10:
             opt_sol, opt_val, datastream = simulated_annealing(starting_sol, n_iter, temp, param)
             attempts += 1
@@ -1153,8 +1052,8 @@ def find_all_flower_sols(puzzle, attempts, all_tiles, n_iter, temp, param=1.0, w
     solutions = [[] for _ in range(2)]
     for k in range(attempts):
         print(k)
-        starting_sol = gen_start_sol(list(puzzle), all_tiles, standard=1)
-        opt_sol, opt_val, _ = simulated_annealing(starting_sol, n_iter, temp, param, write_data=0)
+        starting_sol = create_start_sol(list(puzzle), all_tiles, standard=1)
+        opt_sol, opt_val, datastream = simulated_annealing(starting_sol, n_iter, temp, param, write_data=1)
         if opt_val == 0:
             if len(solutions[0]) == 0:
                 solutions[0].append(std(opt_sol))
@@ -1254,88 +1153,67 @@ def standardize_sols(solutions):
     return std_sols
 
 
-def find_sol_rand(runs, all_tiles, puzzle=None, conf=0.95):
-    """
-    Versucht, von einem Puzzle eine Lösung durch pures Ausprobieren aller Möglichkeiten zu finden
-    :param runs: Anzahl der Versuche (ein Versuch läuft bis eine Lösung gefunden wurde)
-    :param all_tiles: Alle Spielsteine codiert
-    :param puzzle: optional ein Puzzle welches gelöst werden soll
-    :param conf: Konfidenz für die Angabe der Anzahl der Lösungen des Puzzles auf Grundlage der durchschnittlichen Anzahl
-                 an benötigten Schritten bis zum Finden einer Lösung
-    :return: Durchnittswert bis zum Finden einer Lösung, Generierungen bis Lösung pro Versuch als array
-    """
-    attempts = 0
-    steps = []
-    if puzzle is None:
-        curr = gen_random_sol(tiles_complete, n_tiles=7, kangaroo=1, sample=0, ascending=0, randomness=0, standard=1)
-    else:
-        curr = gen_start_sol(puzzle, all_tiles, 1)
-    for i in range(runs):
-        run_steps = 0
-        print(i)
-        current_score = 1
-        # curr = []
-        while current_score > 0:
-            curr = gen_start_sol(curr[0], all_tiles, 1)
-            current_score = objective(curr)
-            run_steps += 1
-        print(curr)
-        attempts += run_steps
-        steps.append(run_steps)
-    sol_complete = (math.factorial(7) * (6 ** 7) * 1 / 6)
-    avg = attempts // runs
-    std_var = np.std(steps)
-    print(f"Anzahl Lsg. approx: {sol_complete // avg:.0f}, Konfidenzintervall auf {conf}:"
-          f" +/- {(np.sqrt(1 - conf) * sol_complete) / std_var:.0f}")
-    print(f"Mittelwert: {avg}")
-    print(f"Standardabweichung: {std_var:.0f}")
-    print(steps)
-    return avg, steps
+def join_sols(new_list, ex_list):
+    comb_list = copy.deepcopy(ex_list)
+    for sol in new_list:
+        comb_list.append(sol)
+    return comb_list
 
 
-def random_pyramid(attempts, all_tiles):
-    """
-    Das unsolved Loop Puzzle durch zuföllige Generierungen versuchen zu lösen
-    :param attempts: Versuche
-    :param all_tiles: Steine
-    :return: Plot
-    """
-    data = [[] for _ in range(2)]
+def write_file(sols, filename="test.txt"):
+    with open(filename, 'w') as file:
+        for sol in sols:
+            file.write(str(sol) + '\n')
 
-    def gen_sol():
-        sol = [[] for _ in range(4)]
-        sol[0] = [0, 1, 2, 3, 10, 11, 12, 24, 25, 26, 27, 44, 45, 46, 47, 48, 69, 70, 71, 72, 73, 74, 100, 101,
-                  102, 103, 104, 105, 106, 137, 138, 139, 140, 141, 142, 143, 144, 180, 181, 182, 183, 184,
-                  185, 186, 187, 188, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238]
-        sol[1] = list(np.random.permutation([*range(56)]))
-        sol[2] = [all_tiles[i] for i in sol[1]]
-        sol[3] = [int(random.uniform(0, 6)) for _ in range(56)]
-        return sol
 
-    opt_val = obj_gen(gen_sol())
-    for k in range(attempts):
-        cand = gen_sol()
-        cand_val = obj_gen(cand)
-        if cand_val < opt_val:
-            opt_val = cand_val
-        data[0].append(k)
-        data[1].append(opt_val)
-        if opt_val == 0:
-            break
-    plt.plot(data[0], data[1])
-    plt.xlabel('Iteration')
-    plt.ylabel('Objective')
-    plt.ylim(0, max(data[1]))
-    # plt.legend()
-    plt.title(datetime.datetime.now().time())
-    plt.show()
-    return None
+def get_unique_sols(sols):
+    sol_copy = standardize_sols(sols)
+    sols_uniq = []
+    for sol in sol_copy:
+        if sol not in sols_uniq:
+            sols_uniq.append(sol)
+    return sols_uniq
+
+
+def find_flowers_parallel(puzzle, attempts_per_call, calls_per_process, all_tiles, n_iter, temp, param=1.0, write=1,
+                          filename=None):
+    """
+    Findet Lösungen durch Parallelisierung (Insgesamte Versuche = attempts_per_call * calls_per_process)
+    :param puzzle: Steinnummern, welche das Puzzle definieren, als array
+    :param attempts_per_call: Anzahl der Durchläufe
+    :param calls_per_process: Anzahl der Aufrufe der Funktion pro Prozess
+    :param all_tiles: array mit allen 56 Codierungen der Steine
+    :param n_iter: Schrittanzahl Alg.
+    :param temp: Temperatur Alg.
+    :param param: Ann.wk. Alg.
+    :param write: boolean, ob Lösungen in .txt geschrieben werden sollen
+    :param filename: Name der Textdatei
+    :return: array mit den gefundenen Lösungen
+    """
+    cores = multiprocessing.cpu_count()
+    print(cores)
+    comb_sols = []
+    calls = attempts_per_call * calls_per_process
+    with multiprocessing.Pool(cores) as pool:
+        input_args = [(puzzle, attempts_per_call, all_tiles, n_iter, temp, param, 0) for _ in range(calls_per_process)]  # attempts
+        output = pool.starmap(find_all_flower_sols, input_args)
+        # output = find_all_flower_sols(rand_sol[0], 5, tiles_complete, steps, temperature, 6, 0)
+        print(output)
+    for run in output:
+        comb_sols = join_sols(run, comb_sols)
+    comb_sols = get_unique_sols(comb_sols)
+    if write:
+        if filename is None:
+            filename = '_'.join([str(sorted(puzzle)[k]) for k in range(len(puzzle))]) + \
+                       f"__{calls}_{len(comb_sols)}" + ".txt"  # '2_17_32_36_38_41_54__2000_17.txt'
+        write_file(comb_sols, filename)
+    return comb_sols
 
 
 def main():
     solution = [[1, 2, 5, 7, 9, 11, 12],
                 ['212313', '131322', '121332', '112233', '113223', '221331', '113322'], [0, 2, 2, 3, 5, 4, 0]]
-    # start_sol = random_sol_gen(tiles_complete, n_tiles=7, kangaroo=1, sample=0, ascending=0, randomness=0, standard=1)
+    # start_sol = randomSol(tiles, 1)
     # start_sol = [[6, 4, 8, 11, 3, 1, 12], ['113232', '131223', '121323', '221331', '112332', '212313', '113322'],
     #              [2, 4, 3, 5, 2, 3, 5]]  # 1 Fehler
     start_sol = [[1, 3, 4, 6, 8, 11, 12], ['212313', '112332', '131223', '113232', '121323', '221331', '113322'],
@@ -1356,29 +1234,21 @@ def main():
                      '242343', '224343', '131223', '212414', '313414', '223434', '121424', '113232',
                      '232434', '112323', '331441'],
                     [1, 3, 3, 0, 5, 3, 3, 3, 4, 0, 3, 2, 4, 1, 0, 3, 5, 2, 5]]
-    unsolvable_pyramid = [[0, 1, 2, 3, 10, 11, 12, 24, 25, 26, 27, 44, 45, 46, 47, 48, 69, 70, 71, 72, 73, 74, 100, 101,
-                           102, 103, 104, 105, 106, 137, 138, 139, 140, 141, 142, 143, 144, 180, 181, 182, 183, 184,
-                           185, 186, 187, 188, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238],
-                          [28, 48, 31, 45, 39, 30, 47, 22, 1, 3, 34, 40, 51, 24, 13, 52, 6, 29, 27, 41, 38, 12, 10, 53,
-                           4, 32, 55, 21, 16, 17, 23, 14, 49, 18, 26, 8, 54, 2, 36, 25, 5, 20, 37, 46, 15, 9, 44, 35,
-                           33, 43, 11, 7, 50, 42, 0, 19],
-                          ['114343', '114242', '114334', '112442', '331441', '131344', '121442', '323424', '212313',
-                           '112332', '113434', '113344', '114224', '232434', '121233', '141242', '113232', '313414',
-                           '242334', '141433', '131434', '113322', '131232', '221441', '131223', '131443', '121244',
-                           '223344', '224343', '332442', '223443', '232344', '112244', '223434', '224433', '121323',
-                           '114422', '131322', '141343', '224334', '121332', '232443', '113443', '141224', '242343',
-                           '113223', '141422', '114433', '141334', '212414', '221331', '112233', '121424', '112424',
-                           '112323', '243324'],
-                          [1, 1, 4, 3, 2, 1, 5, 3, 4, 4, 5, 0, 2, 0, 5, 5, 3, 5, 2, 3, 2, 1, 1,
-                           0, 4, 2, 5, 1, 3, 4, 2, 5, 2, 0, 0, 3, 5, 0, 1, 5, 2, 0, 0, 3, 0, 5,
-                           4, 3, 0, 4, 1, 4, 0, 5, 1, 4]]
     # rot_sol = rotate_sol(solution)
     # draw_solution(solution)
     # draw_solution(rot_sol, tiles)
 
-    # Lösung durch Zufall finden, daraus Funktion schreiben, welche die durchschnittliche Anzahl der Schritte
-    # bis zur ersten fehlerfreien Lösung ausgibt
-    # avg, vals = find_sol_rand(3, tiles_complete, all_puzzles[0])
+    # Lösung durch Zufall finden
+    # current_score = 12
+    # current_solution = []
+    # while current_score > 0:
+    #     current_solution = randomSol(tiles, 1)
+    #     print(current_solution)
+    #     print("Value of the objective function of the current solution: \n")
+    #     current_score = objective(current_solution)
+    #     print(current_score)
+    # draw_solution(current_solution, tiles)
+    # print(objective(solution))
 
     temperature = 500
     steps = 25000
@@ -1425,12 +1295,10 @@ def main():
     # plot_cand_curr_over_steps(datastream)
 
     # find_unsolvable(attempts_to_solve=10, attempts_to_search=100, n_iter=20000, temp=500, param=5)
-    # elim_ident("")
+    # elim_ident()
 
-    # solo, dolo, data = sim_ann_gen(unsolvable_pyramid, 1000, 50, 10, 1)
-    # draw_sol_gen(solo)
-    # plot_cand_curr_over_steps(data)
-    # plot_val_over_steps(data)
+    find_flowers_parallel(puzzle=rand_sol[0], attempts_per_call=10, calls_per_process=20, all_tiles=tiles_complete,
+                          n_iter=steps, temp=temperature, param=6, write=1)
 
 
 if __name__ == "__main__":
