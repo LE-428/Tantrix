@@ -9,6 +9,8 @@ import datetime
 
 import math
 import matplotlib.pyplot as plt
+from matplotlib.patches import Polygon, Arc
+from matplotlib.lines import Line2D
 
 # to do: allgemeine Lösungen zulassen, funktionen verallgemeinern, alle 14C7 Blumen lösen
 
@@ -52,6 +54,26 @@ tiles_front_back_indices[1] = [2 * i + 1 for i in range(7)]
 all_puzzles = list(combinations([*range(14)], 7))
 
 
+def get_dist(tile, col):
+    """
+    Abstand von einer Farbe in der Codierung, Beispiel "121323", get_dist(_, 1) liefert 2
+    :param tile: Codierung eines Steins
+    :param col: gesuchte Farbe
+    :return: Abstand im array zwischen den beiden farbigen Kanten
+    """
+    indices = []  # Problem: was wenn Farbe nicht in tile enthalten?
+    for r in range(6):
+        if tile[r] == str(col):
+            indices.append(r)
+    if len(indices) == 0:
+        return -1, -1
+    else:
+        dist = indices[1] - indices[0]
+    if dist > 3:
+        dist = 6 - dist
+    return dist, indices[0]
+
+
 def generate_tiles(tile_set):
     """
     Aus den ersten 14 Spielsteine die weiteren 42 generieren
@@ -67,25 +89,6 @@ def generate_tiles(tile_set):
         :return: das verschobene Tile
         """
         return [tile[(i + offset) % 6] for i in range(6)]
-
-    def get_dist(tile, col):
-        """
-        Abstand von einer Farbe in der Codierung, Beispiel "121323", get_dist(_, 1) liefert 2
-        :param tile: Codierung eines Steins
-        :param col: gesuchte Farbe
-        :return: Abstand im array zwischen den beiden farbigen Kanten
-        """
-        indices = []  # Problem: was wenn Farbe nicht in tile enthalten?
-        for r in range(6):
-            if tile[r] == str(col):
-                indices.append(r)
-        if len(indices) == 0:
-            return -1, -1
-        else:
-            dist = indices[1] - indices[0]
-        if dist > 3:
-            dist = 6 - dist
-        return dist, indices[0]
 
     def sort_sol(tile):
         """
@@ -120,51 +123,6 @@ def generate_tiles(tile_set):
             tiles_compl[u][v] = sort_sol(tiles_compl[u][v])
             tiles_compl[u][v] = ''.join(tiles_compl[u][v])
     return tiles_compl
-
-
-# def gen_cand(curr,
-#              swap_and_rotate=1):  # DAS HIER war MIES VERBUGGT!!!!!!; [[38, 41, 17, 2, 54, 32, 36], ['131434', 5, '332442', 0, 3, 3, 3], [0, 3, 3, 1, 0, 0, 0]]
-#     """
-#     Generiere einen Kandidaten für allgemeine Formen von Lösungen
-#     Dieselben Tiles vertauschen und rotieren? (swap_and_rotate=1 setzen, liefert bessere Ergebnisse)
-#     :param curr: Eingangslösung
-#     :param swap_and_rotate: boolean, default True
-#     :return: Ausgangslösung
-#     """  # Positionen der Steine verändern, allgemene Lösungen, längste Linie einer Farbe bestimmen, Fitnessfkt anpassen
-#     cand = copy.deepcopy(curr)  # Umkopieren, da sonst die current Lösung verändert wird
-#     n_tiles = len(cand[0])
-#     n_swaps = np.random.randint(0, n_tiles + 1)  # Anzahl der Vertauschungen
-#     standard = 0
-#     if len(cand) == 3:
-#         cand.insert(0, [*range(n_tiles)])
-#         standard = 1
-#     if swap_and_rotate:
-#         n_rotations = n_swaps
-#     else:
-#         n_rotations = np.random.randint(0, n_tiles + 1)  # Anzahl der Rotationen
-#     swap_indices = random.sample([*range(0, n_tiles)], k=n_swaps)  # Indizes der zu vertauschenden Steine,
-#     # für Blume ([*range(0, 7)], k=n_swaps)
-#     swap_indices_permutation = np.random.permutation(swap_indices)
-#     swap_tiles_perm = [cand[1][k] for k in swap_indices_permutation]  # Permutation der betroffenen Steine
-#     rotations = np.random.choice(6, n_rotations)  # Rotationen der Steine festlegen
-#     if swap_and_rotate:
-#         rotation_indices = swap_indices
-#         for z in range(len(swap_indices)):
-#             if swap_indices[z] == swap_indices_permutation[z] and len(swap_indices) > 1:  # Falls nicht vertauscht wird
-#                 # , wird wenigstens rotiert
-#                 rotations[z] = 0
-#     else:
-#         rotation_indices = random.sample([*range(0, n_tiles)], k=n_rotations)  # Indizes der zu rotierenden Steine
-#     tiles_copy = copy.deepcopy(cand[2])
-#     for k, rot in enumerate(rotation_indices):
-#         cand[3][rot] = (cand[3][rot] + rotations[k]) % 6
-#     for j, swap in enumerate(swap_indices):
-#         cand[1][swap] = swap_tiles_perm[j]
-#         cand[2][swap] = tiles_copy[swap_indices_permutation[j]]
-#     # print(f"Anzahl der Vertauschungen/Rotationen: {n_swaps}, {n_rotations}")
-#     if standard:
-#         return cand[1:]
-#     return cand
 
 
 def gen_cand_morph(curr, swap_and_rotate=1, morphing=0):
@@ -275,23 +233,6 @@ def rotate_sol(sol, n_rotations=1):  # bei allg. Lsg.: Ringe um den Ursprung ver
     return sol_rot
 
 
-# def solutions_equiv(sol1, sol2):
-#     """
-#     Zwei Lösungen vergleichen, und überprüfen, ob sie bis auf Rotation des gesamten Puzzles identisch sind, ein Puzzle
-#     wird sechsmal gedreht (der mittlere Stein wird einmal rotiert im UZS, alle anderen Steine werden um ein Feld weiter-
-#     gesetzt und ebenfalls um eine Kante im UZS rotiert, dann wird verglichen
-#     :param sol1: erste Lösung
-#     :param sol2: zweite Lösung
-#     :return: boolean
-#     """
-#     rotator = copy.deepcopy(sol1)
-#     for _ in range(1, 7):  # die erste Lösung wird insgesamt sechsmal rotiert im UZS
-#         rotator = rotate_sol(rotator)
-#         if rotator == sol2:
-#             return True
-#     return False
-
-
 def d2b(decimal, leading_zero_digit=0):
     """
     Zahl im Dezimalsystem in Binär umwandeln, Möglichkeit, vorne Nullen
@@ -315,34 +256,6 @@ def d2b(decimal, leading_zero_digit=0):
             result.append("0")
     result = result[::-1]
     return ''.join(result)
-
-
-# def get_coords_from_pos(pos):
-#     full_circles = 0
-#     start_coords = np.array([0, 0])
-#     coords = np.array([0, 0])
-#     moving_dir = np.array([0, 0])
-#     for k in range(pos):
-#         x = coords[0]
-#         y = coords[1]
-#         if x == 0:
-#             if y > 0:
-#                 moving_dir = np.array([-1, -1])
-#             elif y < 0:
-#                 moving_dir = np.array([1, 1])
-#         elif y == 0:
-#             if x > 0:
-#                 moving_dir = np.array([0, 1])
-#             elif x < 0:
-#                 moving_dir = np.array([0, -1])
-#         elif abs(x) == full_circles and abs(y) == full_circles:
-#             moving_dir = np.array([np.sign(x) * (-1), 0])
-#         coords += moving_dir
-#         if np.array_equal(coords, start_coords):
-#             coords += np.array([-1, -1])
-#             start_coords = copy.deepcopy(coords)
-#             full_circles += 1
-#     return coords
 
 
 def get_coords_from_pos(pos):
@@ -489,7 +402,7 @@ def getCoordinates(pos):
     return hex_matrix @ coords
 
 
-def draw_solution(solution):
+def draw_sol(solution):
     """
     Die Lösung plotten, jedes Tile in der Lösung wird betrachtet und einzeln
     geplottet nach der Orientierung und den Farbcodes
@@ -509,7 +422,7 @@ def draw_solution(solution):
 
     ax.axis('equal')
     ax.axis('off')
-    plt.title(datetime.datetime.now().time())
+    plt.title(f"{datetime.datetime.now().time()}, {objective(solution)} Fehler")
     plt.show()
 
 
@@ -537,6 +450,98 @@ def draw_sol_gen(solution):
     plt.show()
 
 
+# def draw_hexagon(ax, position, orientation, tile, size=0.55):
+#     """
+#     Hexagon in den Plot einzeichnen
+#     :param ax: Matplotlib-Objekt
+#     :param position: Position laut Systematik
+#     :param orientation: Rotation des Steins auf dem Feld
+#     :param tile: Codierung des Steins
+#     :param size: Größe des Sechsecks
+#     :return: Matplotlib-Plot
+#     """
+#     colors = {'1': 'blue', '2': 'yellow', '3': 'red', '4': 'green'}
+#     x, y = getCoordinates(position)
+#
+#     angles = np.arange(- 2 / 3 * np.pi, 4 / 3 * np.pi, np.pi / 3)
+#     for edge in range(0, 6):
+#         x_start = x + size * np.cos(angles[edge])
+#         y_start = y + size * np.sin(angles[edge])
+#         x_end = x + size * np.cos(angles[(edge + 1) % 6])
+#         y_end = y + size * np.sin(angles[(edge + 1) % 6])
+#
+#         color = colors[str(getColor(tile, edge, orientation))]
+#
+#         ax.plot([x_start, x_end], [y_start, y_end], color=color, linewidth=3)
+
+
+# def draw_hexagon(ax, position, orientation, tile, size=0.55):
+#     """
+#     Hexagon in den Plot einzeichnen
+#     :param ax: Matplotlib-Objekt
+#     :param position: Position laut Systematik
+#     :param orientation: Rotation des Steins auf dem Feld
+#     :param tile: Codierung des Steins
+#     :param size: Größe des Sechsecks
+#     :return: Matplotlib-Plot
+#     """
+#
+#     def find_pairs(tl):
+#         """Die Kantenpaare einer Farbe finden und ausgeben"""
+#         prs = []
+#         for k in range(1, 5):
+#             if str(k) in tl:
+#                 pair = [i for i, col in enumerate(tl) if col == str(k)]
+#                 pair.append(k)
+#                 prs.append(pair)
+#         return prs
+#
+#     def get_angle(tile, color):
+#         """Den Winkel des Bogens zwischen den beiden Kanten einer Farbe ausgeben"""
+#         temp, _ = get_dist(tile, color)
+#         return np.deg2rad(temp * 60)
+#
+#     def draw_semicircle(ax, x1, y1, x2, y2, sangle, eangle, color='black', lw=1):
+#         """
+#         draw a semicircle between the points x1,y1 and x2,y2
+#         the semicircle is drawn to the left of the segment
+#         """
+#         ax = ax or plt.gca()
+#         # startangle = float(np.arctan2(y2 - y1, x2 - x1))
+#         diameter = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)  # Euclidian distance
+#         ax.add_patch(Arc(((x1 + x2) / 2, (y1 + y2) / 2), diameter, diameter, theta1=sangle, theta2=eangle,
+#                          edgecolor=color, lw=lw))
+#
+#     colors = {'1': 'blue', '2': 'yellow', '3': 'red', '4': 'green'}
+#     x, y = getCoordinates(position)
+#     angles = np.arange(- 2 / 3 * np.pi, 4 / 3 * np.pi, np.pi / 3)
+#     pairs = find_pairs(tile)
+#     hexagon = np.array([[x + size * np.cos(angles[edge]), y + size * np.sin(angles[edge])] for edge in range(6)])
+#     edge_angles = [float(np.arctan2(hexagon[(k + 1) % 6][1] - hexagon[k][1],
+#                                     hexagon[(k + 1) % 6][0] - hexagon[1][0])) for k in range(6)]
+#     centers = [hexagon[k] + ((hexagon[(k + 1) % 6] - hexagon[k]) / 2) for k in range(6)]
+#     for edge in range(6):
+#         # x_start = x + size * np.cos(angles[edge])
+#         # y_start = y + size * np.sin(angles[edge])
+#         # x_end = x + size * np.cos(angles[(edge + 1) % 6])
+#         # y_end = y + size * np.sin(angles[(edge + 1) % 6])
+#         color = colors[str(getColor(tile, edge, orientation))]
+#         # color = "black"
+#         # ax.plot([x_start, x_end], [y_start, y_end], color=color, linewidth=3)
+#         ax.plot([hexagon[edge][0], hexagon[(edge + 1) % 6][0]], [hexagon[edge][1], hexagon[(edge + 1) % 6][1]],
+#                 color=color, linewidth=3)
+#         if edge == 0:
+#             ax.plot([centers[edge][0], centers[(edge + 1) % 6][0]], [centers[edge][1], centers[(edge + 1) % 6][1]],
+#                     color=color, marker="v")
+#     for edge_pair in pairs:
+#         arc_color = colors[str(getColor(tile, edge_pair[0], orientation))]
+#         arc_angle = get_angle(tile, edge_pair[2])
+#         startangle = edge_angles[(edge_pair[0] + orientation) % 6]
+#         endangle = startangle + arc_angle
+#         draw_semicircle(ax, x1=centers[edge_pair[0]][0], y1=centers[edge_pair[0]][1],
+#                         x2=centers[edge_pair[1]][0], y2=centers[edge_pair[1]][1],
+#                         sangle=startangle, eangle=endangle, color=arc_color, lw=5)
+
 def draw_hexagon(ax, position, orientation, tile, size=0.55):
     """
     Hexagon in den Plot einzeichnen
@@ -547,16 +552,90 @@ def draw_hexagon(ax, position, orientation, tile, size=0.55):
     :param size: Größe des Sechsecks
     :return: Matplotlib-Plot
     """
+
+    def find_pairs(tl):
+        """
+        Die Kantenpaare einer Farbe finden und ausgeben
+        :param tl: Tile
+        :return: [Kante 1, Kante 2, Farbe: int, Distanz (1,2,3)]
+        """
+        prs = []
+        for k in range(1, 5):
+            if str(k) in tl:
+                pair = [i for i, col in enumerate(tl) if col == str(k)]
+                dist, _ = get_dist(tl, k)
+                pair.append(k)
+                pair.append(dist)
+                prs.append(pair)
+        return prs
+
+    def get_middle_edge(edge1, edge2):
+        """
+        Gibt die mittlere Kante zwischen zwei Kanten zurück, die eine Kante voneinander entfernt sind.
+        :param edge1: Erste Kante (int zwischen 0 und 5)
+        :param edge2: Zweite Kante (int zwischen 0 und 5)
+        :return: Mittlere Kante (int)
+        """
+        # Sortiere die Kanten in aufsteigender Reihenfolge
+        edge1, edge2 = sorted([edge1, edge2])
+        # Überprüfen, ob die Kanten eine Kante voneinander entfernt sind
+        if (edge2 - edge1) == 2:
+            return (edge1 + 1) % 6
+        elif (edge2 - edge1) == 4:
+            return (edge2 + 1) % 6
+        else:
+            raise ValueError("Die Kanten sind nicht eine Kante voneinander entfernt.")
+
     colors = {'1': 'blue', '2': 'yellow', '3': 'red', '4': 'green'}
     x, y = getCoordinates(position)
     angles = np.arange(- 2 / 3 * np.pi, 4 / 3 * np.pi, np.pi / 3)
-    for edge in range(0, 6):
-        x_start = x + size * np.cos(angles[edge])
-        y_start = y + size * np.sin(angles[edge])
-        x_end = x + size * np.cos(angles[(edge + 1) % 6])
-        y_end = y + size * np.sin(angles[(edge + 1) % 6])
-        color = colors[str(getColor(tile, edge, orientation))]
-        ax.plot([x_start, x_end], [y_start, y_end], color=color, linewidth=3)
+    pairs = find_pairs(tile)
+    hexagon = np.array([[x + size * np.cos(angles[edge]), y + size * np.sin(angles[edge])] for edge in range(6)])
+    centers = [hexagon[k] + ((hexagon[(k + 1) % 6] - hexagon[k]) / 2) for k in range(6)]
+    # Zeichne das Hexagon mit schwarzer Füllung
+    hex_patch = Polygon(hexagon, closed=True, fill=True, edgecolor='black', facecolor='black')
+    ax.add_patch(hex_patch)
+    # for edge in range(6):
+    #     # color = colors[str(getColor(tile, edge, orientation))]
+    #     color = "black"
+    #     ax.plot([hexagon[edge][0], hexagon[(edge + 1) % 6][0]], [hexagon[edge][1], hexagon[(edge + 1) % 6][1]],
+    #             color=color, linewidth=3)
+    for edge_pair in pairs:
+        start = centers[(edge_pair[0] - orientation) % 6]
+        end = centers[(edge_pair[1] - orientation) % 6]  # - orientation???
+        color = colors[str(edge_pair[2])]
+        if edge_pair[3] == 3:  # Distanz 3, gerade Verbindung
+            dist = np.linalg.norm(end - start)
+            if dist > size:
+                scale_factor = size / dist + 0.29
+                start = start + (end - start) * (1 - scale_factor) / 2
+                end = end - (end - start) * (1 - scale_factor) / 2
+            ax.plot([start[0], end[0]], [start[1], end[1]], color=color, lw=10)
+            continue
+        else:
+            if edge_pair[3] == 1:  # aneinanderliegende Kanten, Distanz 1, Mittelpunkt des Kreises ist die Ecke des Hexagon
+                center = hexagon[(edge_pair[1] - orientation) % 6]
+            else:
+                nbg_edge = (get_middle_edge(edge_pair[0], edge_pair[1]) - orientation) % 6
+                # die Kante zwischen den beiden gleichgefärbten  # (edge_pair[0] + edge_pair[1]) + 4 % 6
+                nbr = get_neighbor(position, nbg_edge)
+                center = getCoordinates(nbr)
+            radius = np.sqrt((start[0] - center[0])**2 + (start[1] - center[1])**2)
+            angle1 = np.degrees(np.arctan2(start[1] - center[1], start[0] - center[0]))
+            angle2 = np.degrees(np.arctan2(end[1] - center[1], end[0] - center[0]))
+            # Stelle sicher, dass der Winkel im Bereich [0, 360) ist
+            angle1 = angle1 % 360
+            angle2 = angle2 % 360
+            # Berechne die Start- und Endwinkel des Kreissegments
+            start_angle = min(angle1, angle2)
+            end_angle = max(angle1, angle2)
+            # Berechne die Bogenlänge und stelle sicher, dass der Bogen der kürzere ist
+            if end_angle - start_angle > 180:
+                start_angle, end_angle = end_angle, start_angle
+                start_angle += 360
+            # Zeichne das Kreissegment
+            arc = Arc(center, 2 * radius, 2 * radius, theta1=start_angle, theta2=end_angle, edgecolor=color, lw=10)
+            ax.add_patch(arc)
 
 
 def get_puzzles(tile_combo):
@@ -1124,19 +1203,6 @@ def plot_flower_attempts(res):
     plt.show()
 
 
-# def check_solution_new(new_opt, sols):
-#     """
-#     Überprüfen, ob eine Lösung schon enthalten ist in einer Liste von Lösungen (modulo Rotation)
-#     :param new_opt: neue Lösung
-#     :param sols: Liste von existierenden Lösungen
-#     :return: bool
-#     """
-#     for solution in sols:
-#         if solutions_equiv(new_opt, solution):
-#             return False
-#     return True
-
-
 def find_all_flower_sols(puzzle, attempts, all_tiles, n_iter, temp, param=1.0, write_file=0, filename=None):
     """
     Findet so viele verschiedene Lösungen eines Blumenpuzzles wie möglich
@@ -1332,6 +1398,21 @@ def random_pyramid(attempts, all_tiles):
     return None
 
 
+def flower_one_tile(all_tiles):
+    vals = []
+    for k in range(len(all_tiles)):
+        print(f"Blume: {k}")
+        sol = gen_start_sol([k for _ in range(7)], tiles_complete, 1)
+        sol, val, _ = simulated_annealing(sol, 25000, 500, 5, 1)
+        # draw_solution(sol)
+        vals.append(val)
+        print(val)
+    for g in range(4):
+        print(vals[g * 14:g * 14 + 14])
+    print("\n")
+    print(sum(vals))
+
+
 def main():
     solution = [[1, 2, 5, 7, 9, 11, 12],
                 ['212313', '131322', '121332', '112233', '113223', '221331', '113322'], [0, 2, 2, 3, 5, 4, 0]]
@@ -1431,6 +1512,9 @@ def main():
     # draw_sol_gen(solo)
     # plot_cand_curr_over_steps(data)
     # plot_val_over_steps(data)
+
+
+    draw_sol_gen(solx)
 
 
 if __name__ == "__main__":
