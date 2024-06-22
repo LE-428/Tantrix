@@ -10,7 +10,6 @@ import datetime
 import math
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon, Arc
-from matplotlib.lines import Line2D
 
 # to do: allgemeine Lösungen zulassen, funktionen verallgemeinern, alle 14C7 Blumen lösen
 
@@ -25,7 +24,7 @@ tiles = ["112323", "212313",  # Die Spielsteine werden codiert mit der Reihenfol
 tile_sets = [
     ['112323', '212313', '131322', '112332', '131223', '121332', '113232', '112233', '121323', '113223', '131232',
      '221331', '113322', '121233'],  # Blau, Gelb, Rot
-    ['232344', '242343', '224343', '332442', '223434', '243324', '232443', '223344', '323424', '223443', '232434',
+    ['232344', '242343', '224343', '332442', '223434', '242433', '232443', '223344', '323424', '223443', '232434',
      '224334', '224433', '242334'],  # Gelb, Rot, Grün
     ['114343', '313414', '131344', '114334', '131443', '141334', '113434', '114433', '141343', '113443', '131434',
      '331441', '113344', '141433'],  # Blau, Rot, Grün
@@ -35,12 +34,36 @@ tile_sets = [
 # alle 56 Spielsteine codiert, Priorität bei der Rotation: blau, gelb, rot
 tiles_complete = ['112323', '212313', '131322', '112332', '131223', '121332', '113232',
                   '112233', '121323', '113223', '131232', '221331', '113322', '121233',
-                  '232344', '242343', '224343', '332442', '223434', '243324', '232443',
+                  '232344', '242343', '224343', '332442', '223434', '242433', '232443',  # 242433 anstatt 243324
                   '223344', '323424', '223443', '232434', '224334', '224433', '242334',
                   '114343', '313414', '131344', '114334', '131443', '141334', '113434',
                   '114433', '141343', '113443', '131434', '331441', '113344', '141433',
                   '112424', '212414', '141422', '112442', '141224', '121442', '114242',
                   '112244', '121424', '114224', '141242', '221441', '114422', '121244']
+
+permutation = [8, 4, 10, 13, 1, 11, 7, 14, 6, 5, 9, 2, 3, 12,
+               31, 32, 18, 16, 17, 19, 33, 21, 35, 15, 34, 22, 23, 20,
+               38, 40, 36, 26, 41, 27, 37, 28, 39, 30, 42, 24, 25, 29,
+               55, 50, 53, 47, 54, 46, 56, 45, 44, 49, 51, 48, 43, 52]  # Indizes der Tiles nach offizieller Def.
+
+blue_tiles = [6, 7, 8, 13, 14, 39, 40, 41, 42, 43]  # Pyramide mit blauer Linie
+red_tiles = [4, 5, 10, 11, 15, 16, 18, 19, 24, 25, 26, 27, 28, 29, 30]  # Pyramide mit roter Linie
+green_tiles = [32, 33, 34, 35, 36, 37, 38, 45, 46, 47]
+white_tiles = [*range(48, 57)]
+yellow_tiles = [1, 2, 3, 9, 12, 17, 20, 21, 22, 23, 31, 44]
+
+blue_rainbow = [[0, 2, 3, 9, 10, 11, 22, 23, 24, 25], [3, 6, 32, 38, 0, 8, 7, 36, 29, 54],
+                ['112332', '113232', '131443', '131434', '112323', '121323', '112233', '141343', '313414', '114422'],
+                [1, 1, 2, 3, 1, 0, 0, 1, 2, 1]]
+red_rainbow = [[0, 2, 3, 9, 10, 11, 22, 23, 24, 25, 41, 42, 43, 44, 45],
+               [17, 37, 33, 5, 19, 1, 35, 39, 40, 16, 41, 9, 2, 31, 23],
+               ['332442', '113443', '141334', '121332', '243324', '212313',
+                '114433', '331441', '113344', '224343', '141433', '113223',
+                '131322', '114334', '223443'], [4, 3, 1, 4, 3, 3, 5, 0, 0, 4, 1, 1, 5, 1, 1]]
+
+pyramid1 = [21, 3, 15, 13, 5, 2, 35, 9, 18, 17, 33, 20, 10, 12, 8]  # in offizieller Notation auf Rückseite
+pyramid2 = [23, 45, 25, 28, 16, 15, 13, 5, 30, 31, 33, 19, 20, 8, 7]
+pyramid3 = [23, 45, 47, 49, 5, 51, 50, 6, 39, 33, 19, 54, 53, 55, 41]
 
 tiles_front_back = [[] * 7 for _ in range(2)]  # Liste der Spielsteine mit Vorder- und Rückseite in jeweils
 tiles_front_back[0] = [tiles[2 * i] for i in range(7)]  # einer Zeile
@@ -54,23 +77,31 @@ tiles_front_back_indices[1] = [2 * i + 1 for i in range(7)]
 all_puzzles = list(combinations([*range(14)], 7))
 
 
+def t2kang(tile_list, perm):
+    """
+    Stein-Liste von offizieller Notation in Känguru-Notation umwandeln
+    :param tile_list: List der Steine in offizieller Notation
+    :param perm: Permutation die die Notationen aufeinander abbildet
+    :return: Känguru-Notation
+    """
+    out = [perm.index(k) for k in tile_list]
+    return out
+
+
 def get_dist(tile, col):
     """
-    Abstand von einer Farbe in der Codierung, Beispiel "121323", get_dist(_, 1) liefert 2
+    Abstand von einer Farbe in der Codierung, Beispiel: get_dist("121323", 1) liefert 2
     :param tile: Codierung eines Steins
     :param col: gesuchte Farbe
     :return: Abstand im array zwischen den beiden farbigen Kanten
     """
-    indices = []  # Problem: was wenn Farbe nicht in tile enthalten?
+    if str(col) not in tile:
+        return 0, 0
+    indices = []
     for r in range(6):
         if tile[r] == str(col):
             indices.append(r)
-    if len(indices) == 0:
-        return -1, -1
-    else:
-        dist = indices[1] - indices[0]
-    if dist > 3:
-        dist = 6 - dist
+    dist = indices[1] - indices[0]
     return dist, indices[0]
 
 
@@ -98,8 +129,14 @@ def generate_tiles(tile_set):
         """
         for j in range(1, 4):
             distance, index = get_dist(tile, j)
-            if 0 < distance < 3:
-                tile = shift_tile(tile, index)
+            # if 0 < distance < 3:
+            #     tile = shift_tile(tile, index)
+            #     break
+            if distance in [1, 2, 4, 5]:
+                if distance < 4:
+                    tile = shift_tile(tile, index)
+                else:
+                    tile = shift_tile(tile, -index)
                 break
         return tile
 
@@ -125,19 +162,27 @@ def generate_tiles(tile_set):
     return tiles_compl
 
 
-def gen_cand_morph(curr, swap_and_rotate=1, morphing=0):
+def gen_cand(curr, val=None, max_err=None, swap_and_rotate=1, swap_or_rotate=0,
+             # anzahl swaps, rotationen von temperatur abh, und relativer Richtigkeit?!!!!
+             morphing=0, adapt_operations=0, max_swaps=None, max_rotations=None):
     """
     Generiere einen Kandidaten für allgemeine Formen von Lösungen
-    Dieselben Tiles vertauschen und rotieren? (swap_and_rotate=1 setzen, liefert bessere Ergebnisse)
+    Die selben Tiles vertauschen und rotieren? (swap_and_rotate=1 setzen, liefert bessere Ergebnisse)
+    :param max_err: Maximale Anzahl an Fehler in der aktuellen Lösung
+    :param adapt_operations: Anzahl der shifts/rotations anpassen an relativen Lösungsfortschritt
+    :param val: Fehler der aktuellen Lösung
+    :param max_rotations: Anzahl der Steine, die rotiert werden sollen
+    :param max_swaps: Anzahl der Steine, die vertauscht werden sollen untereinander
     :param curr: Eingangslösung
     :param swap_and_rotate: boolean, default True
+    :param swap_or_rotate: boolean, nur rotieren oder nur vertauschen als Operation
     :param morphing: Form der Lösung verändern, default False 
     :return: Ausgangslösung
-    """  # Positionen der Steine verändern, allgemeine Lösungen, längste Linie einer Farbe bestimmen, Fitnessfkt anpassen
+    """  # Positionen der Steine verändern, längste Linie einer Farbe bestimmen, Fitnessfkt anpassen
 
     def sort_neighbors(zippo):
+        """Sortieren der gezippten Liste basierend auf den Elementen der zweiten Elemente in absteigender Reihenfolge"""
         zippo = [el for el in zippo if el[0] != 0]  # Stein auf Feld 0 herausnehmen, dieser soll immer fix bleiben
-        # Sortieren der gezippten Liste basierend auf den Elementen der zweiten Elemente in absteigender Reihenfolge
         sorted_zippo = sorted(zippo, key=lambda x: x[1], reverse=True)
         return sorted_zippo
 
@@ -158,28 +203,35 @@ def gen_cand_morph(curr, swap_and_rotate=1, morphing=0):
 
     cand = copy.deepcopy(curr)  # Umkopieren, da sonst die current Lösung verändert wird
     n_tiles = len(cand[0])
-    n_swaps = np.random.randint(0, n_tiles + 1)  # Anzahl der Vertauschungen
-    standard = 0
-    if morphing:  # Felder nach freien Nachbarn absteigend ordnen, dann Zufallszahl n_shifts ziehen, die ersten n_shift
-        # Felder verwenden und verschieben, das neue Feld aus den nbrs (freien Feldern löschen), Feld 0 nicht shiften
-        out_zip, nbr_zip = update_solution(cand)
-        n_shifts = np.random.randint(0, len(out_zip))  # Anzahl der Verschiebungen von Steinen
-        for k in range(n_shifts):  # die Listen dann updaten? mit get_neigbor und Vergleich mit nbr
-            old_field = out_zip[k][0]  # Feld, welches aus der Lösung genommen und geändert wird
-            old_index = cand[0].index(old_field)  # Index des alten Feldes in der Lösung
-            # temp_sol = [sol[:old_index] + sol[old_index + 1:] for sol in cand]  # ohne altes Feld betrachten
-            # _, temp_nbr_zip = update_solution(temp_sol)
-            new_field = nbr_zip[k][0]  # temp_nbr_zip
-            cand[0][old_index] = new_field  # Feld verändern
-            out_zip, nbr_zip = update_solution(cand)
-            [out_zip, nbr_zip] = [shuffle_equal_tiles(out_zip), shuffle_equal_tiles(nbr_zip)]
-    if len(cand) == 3:
-        cand.insert(0, [*range(n_tiles)])
-        standard = 1
-    if swap_and_rotate:
-        n_rotations = n_swaps
+    n_swaps = 0
+    n_rotations = 0
+    if max_swaps is not None and max_rotations is not None:
+        if (max_swaps, max_rotations) < (n_tiles, n_tiles):  # Falls gültige Werte für max_swaps/max_rots
+            # swap_and_rotate = 0
+            n_swaps = np.random.randint(1, max_swaps + 1)  # Anzahl der Vertauschungen
+            if swap_and_rotate:
+                n_rotations = n_swaps
+            else:
+                n_rotations = np.random.randint(1, max_rotations + 1)  # Anzahl der Rotationen
     else:
-        n_rotations = np.random.randint(0, n_tiles + 1)  # Anzahl der Rotationen
+        if adapt_operations:
+            if val is None or max_err is None:
+                val = obj(curr)
+                max_err = max_errors(curr)
+            rel_val = val / max_err
+            max_ops = min(math.ceil(rel_val * n_tiles) + 2, n_tiles)
+            n_swaps = np.random.randint(1, max_ops)
+            n_rotations = np.random.randint(1, max_ops)
+        else:
+            n_swaps = np.random.randint(1, n_tiles + 1)  # Anzahl der Vertauschungen
+            n_rotations = np.random.randint(1, n_tiles + 1)  # Anzahl der Rotationen
+        if swap_and_rotate:
+            n_rotations = n_swaps
+    if swap_or_rotate:
+        if bool(np.random.randint(0, 2)):
+            n_swaps = 0
+        else:
+            n_rotations = 0
     swap_indices = random.sample([*range(0, n_tiles)], k=n_swaps)  # Indizes der zu vertauschenden Steine,
     # für Blume ([*range(0, 7)], k=n_swaps)
     swap_indices_permutation = np.random.permutation(swap_indices)
@@ -193,13 +245,30 @@ def gen_cand_morph(curr, swap_and_rotate=1, morphing=0):
                 rotations[z] = 0
     else:
         rotation_indices = random.sample([*range(0, n_tiles)], k=n_rotations)  # Indizes der zu rotierenden Steine
+    standard = 0
+    if len(cand) == 3:
+        cand.insert(0, [*range(n_tiles)])
+        standard = 1
+    if morphing:  # Felder nach freien Nachbarn absteigend ordnen, dann Zufallszahl n_shifts ziehen, die ersten n_shift
+        # Felder verwenden und verschieben, das neue Feld aus den nbrs (freien Feldern löschen), Feld 0 nicht shiften
+        out_zip, nbr_zip = update_solution(cand)
+        n_shifts = np.random.randint(0, len(out_zip))  # Anzahl der Verschiebungen von Steinen
+        for k in range(n_shifts):  # die Listen dann updaten? mit get_neighbor und Vergleich mit nbr
+            old_field = out_zip[k][0]  # Feld, welches aus der Lösung genommen und geändert wird
+            old_index = cand[0].index(old_field)  # Index des alten Feldes in der Lösung
+            # temp_sol = [sol[:old_index] + sol[old_index + 1:] for sol in cand]  # ohne altes Feld betrachten
+            # _, temp_nbr_zip = update_solution(temp_sol)
+            new_field = nbr_zip[k][0]  # temp_nbr_zip
+            cand[0][old_index] = new_field  # Feld verändern
+            out_zip, nbr_zip = update_solution(cand)
+            [out_zip, nbr_zip] = [shuffle_equal_tiles(out_zip), shuffle_equal_tiles(nbr_zip)]
     tiles_copy = copy.deepcopy(cand[2])
     for k, rot in enumerate(rotation_indices):
         cand[3][rot] = (cand[3][rot] + rotations[k]) % 6
     for j, swap in enumerate(swap_indices):
         cand[1][swap] = swap_tiles_perm[j]
         cand[2][swap] = tiles_copy[swap_indices_permutation[j]]
-    # print(f"Anzahl der Vertauschungen/Rotationen: {n_swaps}, {n_rotations}")
+    print(f"Anzahl der Vertauschungen/Rotationen: {n_swaps}, {n_rotations}")
     if standard:
         return cand[1:]
     return cand
@@ -223,11 +292,11 @@ def rotate_sol(sol, n_rotations=1):  # bei allg. Lsg.: Ringe um den Ursprung ver
 
     tile_list = [*range(1, 7)]
     sol_rot = copy.deepcopy(sol)
-    permutation = shift_tiles(tile_list, n_rotations)
+    perm = shift_tiles(tile_list, n_rotations)
     for j in range(1, 7):  # äußere Steine werden n_rotations Positionen in der Systematik weitergeschoben
-        sol_rot[0][j] = sol[0][permutation[j - 1]]  # [(j + 4) % 6 + 1] gegen UZS
-        sol_rot[1][j] = sol[1][permutation[j - 1]]  # [(j % 6) + 1] im UZS
-        sol_rot[2][j] = sol[2][permutation[j - 1]]  # es muss noch rotiert werden
+        sol_rot[0][j] = sol[0][perm[j - 1]]  # [(j + 4) % 6 + 1] gegen UZS
+        sol_rot[1][j] = sol[1][perm[j - 1]]  # [(j % 6) + 1] im UZS
+        sol_rot[2][j] = sol[2][perm[j - 1]]  # es muss noch rotiert werden
     for t in range(7):  # alle (auch mittleren) Steine um n_rotations Positionen im/gegen UZS rotieren
         sol_rot[2][t] = (sol_rot[2][t] + n_rotations) % 6
     return sol_rot
@@ -379,6 +448,79 @@ def get_neighbor(field_number, edge):
     return nbr
 
 
+def get_longest_connection(sol):
+    """
+    Findet die längsten Linien/Schleifen der Farben
+    :param sol: Lösung
+    :return: [[2, 0], [2, 0], [3, 0], [2, 0]]
+             [längste Linie, längste Schleife]
+             1: blau, 2: gelb, 3: rot, 4: grün
+    """
+    if len(sol) == 3:
+        sol.insert(0, [*range(len(sol[0]))])
+
+    def nbr_check_recursive(field, edg, color, visited, solution, start_field):
+        """Sucht rekursiv die angrenzenden Steine ab, ob sich die aktuelle Linie/Schleife dort fortsetzt"""
+        nbr = get_neighbor(field, edg)  # Nachbarn des aktuellen Steins und Kante suchen
+        if (nbr, color) in visited:  # Falls bereits besucht, Funktion verlassen
+            return 0, False  # Vermeidet endlose Rekursion, wenn der Knoten bereits besucht wurde
+        visited.append((nbr, color))  # Farbe wird schon abgehakt, wenn nur die erste Kante der Farbe betrachtet wird
+
+        if nbr not in solution[0]:  # Falls dieses Feld nicht besetzt ist, Funktion verlassen
+            return 0, False
+        else:
+            field_index = solution[0].index(field)
+            curr_code = sol[2][field_index]
+            curr_ort = sol[3][field_index]
+            nbr_index = solution[0].index(nbr)
+            nbr_code = sol[2][nbr_index]
+            nbr_ort = sol[3][nbr_index]
+            nbr_edge = (edg + 3) % 6
+
+            if getColor(curr_code, edg, curr_ort) != getColor(nbr_code, nbr_edge, nbr_ort):
+                return 0, False  # Falls Farben nicht an betreffender Kante übereinstimmen Funktion verlassen
+            else:
+                dist, first_app = get_dist(nbr_code, color)
+                nbr_edges = [(first_app - nbr_ort) % 6, (first_app - nbr_ort + dist) % 6]
+                next_edge = [e for e in nbr_edges if e != nbr_edge][0]  # Kante des nächsten Feldes, welche als Nächstes
+                # betrachtet wird
+                next_field = nbr
+
+                length, looping = nbr_check_recursive(field=next_field, edg=next_edge, color=color, visited=visited,
+                                                      solution=solution, start_field=start_field)  # Rekursion
+                return 1 + length, looping or (nbr == start_field)  # nbr == ?
+
+    visited_tile_color = []
+    longest_conn_color = [[0, 0] for _ in range(4)]
+    for col in range(1, 5):  # blau 1, gelb 2, rot 3, grün 4, jede Farbe wird betrachtet
+        for index in range(len(sol[0])):  # jedes Feld wird pro Farbe erneut betrachtet
+            tile_field = sol[0][index]
+            # tile_num = sol[1][index]
+            tile_code = sol[2][index]
+            tile_ort = sol[3][index]
+            if str(col) in tile_code:  # Feld nur betrachten, falls die gesuchte Farbe enthalten ist
+                if (tile_field, col) not in visited_tile_color:  # nur falls Farbe und Feld nicht betrachtet
+                    conn_len = 0
+                    loop = False
+                    distance, first_appearance = get_dist(tile_code, col)
+                    edge_queue = [(first_appearance - tile_ort) % 6, (first_appearance - tile_ort + distance) % 6]
+                    # distance zwischen 1 und 5 belassen und dafür + tile_ort liefert gleiches ergebnis
+                    for edge in edge_queue:
+                        connection, loop = nbr_check_recursive(field=tile_field, edg=edge, color=col,
+                                                               visited=visited_tile_color, solution=sol,
+                                                               start_field=tile_field)
+                        conn_len += connection
+                        if loop:  # Falls eine Schleife erkannt wurde,
+                            # muss nicht noch in die andere Richtung betrachtet werden
+                            break
+                    if not loop:
+                        conn_len += 1
+                    visited_tile_color.append((tile_field, col))
+                    if conn_len > longest_conn_color[col - 1][int(loop)]:  # loop boolean indizieren
+                        longest_conn_color[col - 1][int(loop)] = conn_len
+    return longest_conn_color
+
+
 def getCoordinates(pos):
     """
     Koordinaten von dem System der Sechseckmittelpunkte umrechnen in kartesische Koordinaten,
@@ -404,35 +546,13 @@ def getCoordinates(pos):
 
 def draw_sol(solution):
     """
-    Die Lösung plotten, jedes Tile in der Lösung wird betrachtet und einzeln
-    geplottet nach der Orientierung und den Farbcodes
-    :param solution: Lösung, welche geplottet werden soll
-    :return: Matplotlib-Plot
-    """
-    fig, ax = plt.subplots(figsize=(8, 6))
-
-    # Größe und Position der Steine festlegen
-    tile_size = 0.55
-
-    # Für jeden Stein in der Lösung
-    for index, tile in enumerate(solution[1]):
-        tile_orientation = solution[2][index]  # HIER WEITER ANPASSEN
-        # Zeichne die Kanten des Steins
-        draw_hexagon(ax, index, tile_orientation, tile, tile_size)
-
-    ax.axis('equal')
-    ax.axis('off')
-    plt.title(f"{datetime.datetime.now().time()}, {objective(solution)} Fehler")
-    plt.show()
-
-
-def draw_sol_gen(solution):
-    """
     Die allgemeine Lösung plotten, jedes Tile in der Lösung wird betrachtet und einzeln
     geplottet nach der Orientierung und den Farbcodes
     :param solution: Lösung, welche geplottet werden soll
     :return: Matplotlib-Plot
     """
+    if len(solution) == 3:
+        solution.insert(0, [*range(len(solution[0]))])
     plot_size = np.round(np.log2(len(solution[0])) + 3)  # Die Anzahl der hinzukommmenden Steine pro Umlauf ist
     # ca. die Anzahl aller vorherigen Steine
     fig, ax = plt.subplots(figsize=(8 / 6 * plot_size, plot_size))
@@ -446,101 +566,9 @@ def draw_sol_gen(solution):
         draw_hexagon(ax, tile_pos, tile_orientation, tile, tile_size)
     ax.axis('equal')
     ax.axis('off')
-    plt.title(f"{datetime.datetime.now().time()}, {obj_gen(solution)} Fehler")
+    plt.title(f"{datetime.datetime.now().time()}, {obj(solution)} Fehler")
     plt.show()
 
-
-# def draw_hexagon(ax, position, orientation, tile, size=0.55):
-#     """
-#     Hexagon in den Plot einzeichnen
-#     :param ax: Matplotlib-Objekt
-#     :param position: Position laut Systematik
-#     :param orientation: Rotation des Steins auf dem Feld
-#     :param tile: Codierung des Steins
-#     :param size: Größe des Sechsecks
-#     :return: Matplotlib-Plot
-#     """
-#     colors = {'1': 'blue', '2': 'yellow', '3': 'red', '4': 'green'}
-#     x, y = getCoordinates(position)
-#
-#     angles = np.arange(- 2 / 3 * np.pi, 4 / 3 * np.pi, np.pi / 3)
-#     for edge in range(0, 6):
-#         x_start = x + size * np.cos(angles[edge])
-#         y_start = y + size * np.sin(angles[edge])
-#         x_end = x + size * np.cos(angles[(edge + 1) % 6])
-#         y_end = y + size * np.sin(angles[(edge + 1) % 6])
-#
-#         color = colors[str(getColor(tile, edge, orientation))]
-#
-#         ax.plot([x_start, x_end], [y_start, y_end], color=color, linewidth=3)
-
-
-# def draw_hexagon(ax, position, orientation, tile, size=0.55):
-#     """
-#     Hexagon in den Plot einzeichnen
-#     :param ax: Matplotlib-Objekt
-#     :param position: Position laut Systematik
-#     :param orientation: Rotation des Steins auf dem Feld
-#     :param tile: Codierung des Steins
-#     :param size: Größe des Sechsecks
-#     :return: Matplotlib-Plot
-#     """
-#
-#     def find_pairs(tl):
-#         """Die Kantenpaare einer Farbe finden und ausgeben"""
-#         prs = []
-#         for k in range(1, 5):
-#             if str(k) in tl:
-#                 pair = [i for i, col in enumerate(tl) if col == str(k)]
-#                 pair.append(k)
-#                 prs.append(pair)
-#         return prs
-#
-#     def get_angle(tile, color):
-#         """Den Winkel des Bogens zwischen den beiden Kanten einer Farbe ausgeben"""
-#         temp, _ = get_dist(tile, color)
-#         return np.deg2rad(temp * 60)
-#
-#     def draw_semicircle(ax, x1, y1, x2, y2, sangle, eangle, color='black', lw=1):
-#         """
-#         draw a semicircle between the points x1,y1 and x2,y2
-#         the semicircle is drawn to the left of the segment
-#         """
-#         ax = ax or plt.gca()
-#         # startangle = float(np.arctan2(y2 - y1, x2 - x1))
-#         diameter = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)  # Euclidian distance
-#         ax.add_patch(Arc(((x1 + x2) / 2, (y1 + y2) / 2), diameter, diameter, theta1=sangle, theta2=eangle,
-#                          edgecolor=color, lw=lw))
-#
-#     colors = {'1': 'blue', '2': 'yellow', '3': 'red', '4': 'green'}
-#     x, y = getCoordinates(position)
-#     angles = np.arange(- 2 / 3 * np.pi, 4 / 3 * np.pi, np.pi / 3)
-#     pairs = find_pairs(tile)
-#     hexagon = np.array([[x + size * np.cos(angles[edge]), y + size * np.sin(angles[edge])] for edge in range(6)])
-#     edge_angles = [float(np.arctan2(hexagon[(k + 1) % 6][1] - hexagon[k][1],
-#                                     hexagon[(k + 1) % 6][0] - hexagon[1][0])) for k in range(6)]
-#     centers = [hexagon[k] + ((hexagon[(k + 1) % 6] - hexagon[k]) / 2) for k in range(6)]
-#     for edge in range(6):
-#         # x_start = x + size * np.cos(angles[edge])
-#         # y_start = y + size * np.sin(angles[edge])
-#         # x_end = x + size * np.cos(angles[(edge + 1) % 6])
-#         # y_end = y + size * np.sin(angles[(edge + 1) % 6])
-#         color = colors[str(getColor(tile, edge, orientation))]
-#         # color = "black"
-#         # ax.plot([x_start, x_end], [y_start, y_end], color=color, linewidth=3)
-#         ax.plot([hexagon[edge][0], hexagon[(edge + 1) % 6][0]], [hexagon[edge][1], hexagon[(edge + 1) % 6][1]],
-#                 color=color, linewidth=3)
-#         if edge == 0:
-#             ax.plot([centers[edge][0], centers[(edge + 1) % 6][0]], [centers[edge][1], centers[(edge + 1) % 6][1]],
-#                     color=color, marker="v")
-#     for edge_pair in pairs:
-#         arc_color = colors[str(getColor(tile, edge_pair[0], orientation))]
-#         arc_angle = get_angle(tile, edge_pair[2])
-#         startangle = edge_angles[(edge_pair[0] + orientation) % 6]
-#         endangle = startangle + arc_angle
-#         draw_semicircle(ax, x1=centers[edge_pair[0]][0], y1=centers[edge_pair[0]][1],
-#                         x2=centers[edge_pair[1]][0], y2=centers[edge_pair[1]][1],
-#                         sangle=startangle, eangle=endangle, color=arc_color, lw=5)
 
 def draw_hexagon(ax, position, orientation, tile, size=0.55):
     """
@@ -563,9 +591,9 @@ def draw_hexagon(ax, position, orientation, tile, size=0.55):
         for k in range(1, 5):
             if str(k) in tl:
                 pair = [i for i, col in enumerate(tl) if col == str(k)]
-                dist, _ = get_dist(tl, k)
+                dst, _ = get_dist(tl, k)
                 pair.append(k)
-                pair.append(dist)
+                pair.append(dst)
                 prs.append(pair)
         return prs
 
@@ -607,20 +635,21 @@ def draw_hexagon(ax, position, orientation, tile, size=0.55):
         if edge_pair[3] == 3:  # Distanz 3, gerade Verbindung
             dist = np.linalg.norm(end - start)
             if dist > size:
-                scale_factor = size / dist + 0.29
+                scale_factor = size / dist + 0.29  # 0.315
                 start = start + (end - start) * (1 - scale_factor) / 2
                 end = end - (end - start) * (1 - scale_factor) / 2
             ax.plot([start[0], end[0]], [start[1], end[1]], color=color, lw=10)
             continue
         else:
-            if edge_pair[3] == 1:  # aneinanderliegende Kanten, Distanz 1, Mittelpunkt des Kreises ist die Ecke des Hexagon
+            if edge_pair[3] == 1 or edge_pair[3] == 5:
+                # aneinanderliegende Kanten, Distanz 1, MP des Kreises ist die Ecke des Hexagon
                 center = hexagon[(edge_pair[1] - orientation) % 6]
-            else:
+            else:  # Distanz 2 (2 oder 4), also eine Kante zw. zsmgeh. Kanten, MP ist Mitte des Nb der mittleren Kante
                 nbg_edge = (get_middle_edge(edge_pair[0], edge_pair[1]) - orientation) % 6
                 # die Kante zwischen den beiden gleichgefärbten  # (edge_pair[0] + edge_pair[1]) + 4 % 6
                 nbr = get_neighbor(position, nbg_edge)
                 center = getCoordinates(nbr)
-            radius = np.sqrt((start[0] - center[0])**2 + (start[1] - center[1])**2)
+            radius = np.sqrt((start[0] - center[0]) ** 2 + (start[1] - center[1]) ** 2)
             angle1 = np.degrees(np.arctan2(start[1] - center[1], start[0] - center[0]))
             angle2 = np.degrees(np.arctan2(end[1] - center[1], end[0] - center[0]))
             # Stelle sicher, dass der Winkel im Bereich [0, 360) ist
@@ -704,16 +733,19 @@ def gen_random_sol(all_tiles, n_tiles=7, kangaroo=1, sample=0, ascending=0, rand
     return sol_arr
 
 
-def gen_start_sol(combo, all_tiles, standard=0):
+def gen_start_sol(combo, all_tiles, standard=0, fields=None):
     """
     Eine Startlösung generieren ausgehend von einer beliebigen Kombination der Spielsteine
+    :param fields: Die Felder, auf welche die Steine gelegt werden, default aufsteigend zugewiesen
     :param standard: Lösung ohne Einträge der Felder generieren
     :param combo: array mit Steine-Nummern
     :param all_tiles: array mit Codierung aller Steine
     :return: array mit Startlösung
     """
+    if fields is None or len(fields) != len(combo):
+        fields = [*range(0, len(combo))]
     sol = [[] * len(combo) for _ in range(4)]
-    sol[0] = [*range(0, len(combo))]
+    sol[0] = fields
     sol[1] = list(np.random.permutation(combo))
     sol[2] = [all_tiles[k] for k in sol[1]]
     sol[3] = [int(random.uniform(0, 6)) for _ in range(len(combo))]
@@ -722,40 +754,33 @@ def gen_start_sol(combo, all_tiles, standard=0):
     return sol
 
 
-def objective(sol):
-    """
-    Fitnessfunktion, welche die Anzahl der Fehler, also nicht übereinstimmender Farben an der Kanten
-    der Steine zählt
-    :param sol: Lösung
-    :return: Ausgabe
-    """
-    mismatches = 0
-    for i in range(0, 7):  # jeden Stein der Blume einmal betrachten
-        if i == 0:  # der mittlere Stein
-            for edge in range(0, 6):  # alle 6 Nachbarsteine werden betrachtet
-                if getColor(sol[1][i], edge, sol[2][i]) != \
-                        getColor(sol[1][edge + 1], (edge + 3) % 6, sol[2][edge + 1]):
-                    mismatches += 1
-        elif i < 6:
-            if getColor(sol[1][i], (i + 1) % 6, sol[2][i]) != getColor(sol[1][i + 1],
-                                                                       (i + 4) % 6, sol[2][i + 1]):
-                mismatches += 1
-        else:  # i = 6
-            if getColor(sol[1][i], (i + 1) % 6, sol[2][i]) != getColor(sol[1][1], (i + 4) % 6,
-                                                                       sol[2][1]):
-                mismatches += 1
-    return mismatches
-
-
-def obj_gen(sol):  # die Kompaktheit der Lösung eingehen lassen, Ringe um 0 mit aufsteigenden Straftermen
+def obj(sol,  # 6 Fehler diff gut oder schlecht? abhängig von n_tiles
+        discrete=1):  # Kompaktheit der Lösung betrachten, Ringe um 0 mit aufsteigenden Straftermen, Anzahl Aussenkanten?, mit max_errors normalisieren?
     """
     Objective-Funktion für verallgemeinerte Lösungen (nicht nur für Blumen), gibt die Anzahl der Fehler an
     (Vorgehen: für jedes Tile die 6 Nachbarn betrachten und die Fehler zählen), langsamer als im Blumen-Fall
+    :param discrete: Die Fehleranzahl diskret Abstufen mit Stufenbreite x, default 1
     :param sol: Lösung
     :return: Fehleranzahl
     """
-    # t1 = time.perf_counter()
     mismatches = 0
+    if len(sol) == 3:  # für Blumen-Lösungen, schneller als die untere Variante
+        outer_indices = [2, 3, 4, 5, 6, 1]
+        for i in range(7):  # Betrachte jeden Stein in der Blume
+            if i == 0:  # Betrachte den mittleren Stein
+                for edge in range(6):  # Vergleiche den mittleren Stein mit seinen 6 Nachbarsteinen
+                    color_center = getColor(sol[1][i], edge, sol[2][i])
+                    color_neighbor = getColor(sol[1][edge + 1], (edge + 3) % 6, sol[2][edge + 1])
+                    if color_center != color_neighbor:
+                        mismatches += 1
+            else:  # Betrachte die äußeren Steine
+                next_index = outer_indices[i - 1]
+                color_current = getColor(sol[1][i], (i + 1) % 6, sol[2][i])
+                color_next = getColor(sol[1][next_index], (i + 4) % 6, sol[2][next_index])
+                if color_current != color_next:
+                    mismatches += 1
+        return mismatches
+    # t1 = time.perf_counter()
     # Caches für Positionen und Farben
     tile_positions = {sol[0][index]: index for index in range(len(sol[0]))}
     tile_colors = [
@@ -779,10 +804,18 @@ def obj_gen(sol):  # die Kompaktheit der Lösung eingehen lassen, Ringe um 0 mit
                     visited_edges.add((neighbor_index, (edge + 3) % 6))
                 # t5 = time.perf_counter()
                 # print(f"init: {t2 - t1}, neigh: {t4 - t3}, rest_loop: {t5 - t4}")
+    if mismatches > 0:
+        out = (mismatches // discrete) + 1  # Bsp 3, (1, 2) -> 1; (3, 4, 5) -> 2 ...
+        return out
     return mismatches
 
 
 def get_outer_fields(sol):  # fehlt: Berechnung Anzahl Berührpunkte der angrenzenden Felder mit der aktuellen Lösung
+    """
+    Berechnet die äußeren Felder einer Lösung und die daran angrenzenden Nachbarfelder
+    :param sol: Lösung
+    :return: äußere Felder mit offenen Kanten, Nachbarfelder mit verbundenen Kanten
+    """
     outer_fields = []  # Aktualisierung nach jedem Shift?
     nbr_fields = []
     outer_open_edges = []
@@ -811,37 +844,67 @@ def get_outer_fields(sol):  # fehlt: Berechnung Anzahl Berührpunkte der angrenz
     return out_zip, nbr_zip
 
 
-def plot_p_over_steps(data):
+def get_open_edges(sol):
+    """Gibt die Summe der freien Kanten einer Lösung aus, Maß für Kompaktheit der Lösung"""
+    outer, _ = get_outer_fields(sol)
+    output = sum([edge[1] for edge in outer])
+    return output
+
+
+def max_errors(sol):
+    """Die maximale Anzahl an Fehlern einer Lösung bestimmen, damit den relativen Lösungsfortschritt berechnen"""
+    if len(sol) == 3:
+        # sol.insert(0, [*range(len(sol[0]))])
+        return 12
+    tile_positions = {sol[0][index]: index for index in range(len(sol[0]))}
+    visited_edges = set()  # Set für besuchte Kantenpaare
+    inner_edges = 0
+    for index in range(len(sol[0])):
+        for edge in range(6):
+            if (index, edge) not in visited_edges:
+                neighbor_field = get_neighbor(sol[0][index], edge)
+                if neighbor_field in tile_positions:
+                    neighbor_index = tile_positions[neighbor_field]
+                    inner_edges += 1
+                    visited_edges.add((index, edge))
+                    visited_edges.add((neighbor_index, (edge + 3) % 6))
+    return inner_edges
+
+
+def plot_p_over_steps(data, standard=0):
     """
     Die Annahmewahrscheinlichkeit für eine schlechtere Lösung im Verlauf des Algorithmus plotten
     :param data: array mit Daten
+    :param standard: Blume: Standard=1, farbiger Plot der Fehler
     :return: Plot
     """
-    colors = {'0': 'blue', '1': 'green', '2': 'red', '3': 'cyan', '4': 'magenta', '5': 'yellow',
-              '6': 'orange', '7': 'lime', '8': 'indigo', '9': 'pink', '10': 'skyblue', '11': 'salmon',
-              '12': 'brown'}  # Farben automatisch anpassen ja nach max(Fehler) in den Daten, Regenbogenverlauf? Warum Code mies langsam?
-    color = [0 for _ in range(len(data[9]))]
-    index_list = [[0] for _ in range(13)]
-    for index, k in enumerate(data[9]):
-        if k <= 0:
-            color[index] = colors[str(0)]
-            index_list[0].append(index)
-        else:
-            color[index] = colors[str(k)]
-            index_list[k].append(index)
-    for err, col in colors.items():
-        plt.scatter([data[0][int(g)] for g in index_list[int(err)]], [data[2][int(j)] for j in index_list[int(err)]],
-                    s=0.2, color=col)
-
-    # plt.scatter(data[0], data[2], s=0.2, color=color)
+    if standard:
+        colors = {'0': 'blue', '1': 'green', '2': 'red', '3': 'cyan', '4': 'magenta', '5': 'yellow',
+                  '6': 'orange', '7': 'lime', '8': 'indigo', '9': 'pink', '10': 'skyblue', '11': 'salmon',
+                  '12': 'brown'}  # Farben automatisch anpassen ja nach max(Fehler) in den Daten, Regenbogenverlauf?
+        color = [0 for _ in range(len(data[9]))]
+        index_list = [[0] for _ in range(13)]
+        for index, k in enumerate(data[9]):
+            if k <= 0:
+                color[index] = colors[str(0)]
+                index_list[0].append(index)
+            else:
+                color[index] = colors[str(k)]
+                index_list[k].append(index)
+        for err, col in colors.items():
+            plt.scatter([data[0][int(g)] for g in index_list[int(err)]],
+                        [data[2][int(j)] for j in index_list[int(err)]],
+                        s=0.2, color=col)
+        legend_labels = []
+        for errors, color_code in colors.items():
+            legend_labels.append(f'{errors}: {color_code}')
+        lgnd = plt.legend(legend_labels, loc='upper right', title="diff: color")
+        for handle in lgnd.legend_handles:
+            handle.set_sizes([6.0])
+    else:
+        plt.scatter(data[0], data[2], s=0.2)
     plt.xlabel('Iteration')
     plt.ylabel('Acceptance probability')
-    legend_labels = []
-    for errors, color_code in colors.items():
-        legend_labels.append(f'{errors}: {color_code}')
-    lgnd = plt.legend(legend_labels, loc='upper right', title="diff: color")
-    for handle in lgnd.legend_handles:
-        handle.set_sizes([6.0])
     plt.title("p in Abhängigkeit von Fehlerdiff. "
               "zw. Kandidaten und aktueller Lösung")
     plt.show()
@@ -899,7 +962,8 @@ def get_temp(temp, step):
     :param step: Schrittanzahl
     :return: Ausgangstemperatur
     """
-    t = temp / (0.2 * float(step + 1))
+    # t = temp / (0.2 * float(step + 1))
+    t = 0.996 ** step * temp
     return t
 
 
@@ -917,24 +981,33 @@ def calc_acceptance(diff, temp):
     return prob
 
 
-# Abbruchkriterium, wenn 0 Fehler
 # evtl bei 1/2 Fehler neuen Kandidaten berechnen durch Vertauschung von 2/3 Steinen?
-# Mit dieser Funktion wird der simulated annealing Algorithmus durchgeführt, Eingangsparameter sind eine Startlösung,
-# die Anzahl der Schritte und eine Anfangstemperatur, ausgegeben wird der beste Kandidat
-def simulated_annealing(init_sol, n_iter, temp, param=1.0, write_data=1):
-    # Data-Array mit 10 Zeilen
-    # [0] Anzahl der Schritte
-    # [1] Temperatur (temp)
-    # [2] Annahmewahrscheinlichkeit einer schlechteren Lösung (p)
-    # [3] Fehleranzahl der besten Lösung (best_val)
-    # [4] Beste Lösung (best_sol)
-    # [5] Fehleranzahl der aktuellen Lösung (curr_val)
-    # [6] Aktuelle Lösung (curr_sol)
-    # [7] Fehleranzahl des aktuellen Kandidaten (cand_val)
-    # [8] Kandidat (cand_sol)
-    # [9] Differenz (diff = cand_val - curr_val)
-    if objective(init_sol) == 0:
-        return [init_sol, objective(init_sol), [[0] * n_iter for _ in range(10)]]
+def simulated_annealing(init_sol, n_iter, temp, param=5.0, morphy=0,
+                        adapt_operations=0, write_data=1, print_iteration=0):
+    """
+    Simulated annealing Algorithmus
+    :param adapt_operations: Anzahl Tauschs/Rotationen dynamisch anpassen mit aktueller Fehleranzahl
+    :param init_sol: Startlösung
+    :param n_iter: Anzahl der Schritte im Algorithmus
+    :param temp: Starttemperatur
+    :param param: Abkühlungsparameter, sorgt dafür, dass schneller nur noch bessere Lösungen akzeptiert werden
+    :param morphy: Soll der Algorithmus versuchen, die Form der Lösung zu verändern?
+    :param write_data: Sollen Daten geschrieben werden?
+    :param print_iteration: Sollen Schritte geprintet werden?
+    :return: Data-Array mit 10 Zeilen
+            [0] Anzahl der Schritte
+            [1] Temperatur (temp)
+            [2] Annahmewahrscheinlichkeit einer schlechteren Lösung (p)
+            [3] Fehleranzahl der besten Lösung (best_val)
+            [4] Beste Lösung (best_sol)
+            [5] Fehleranzahl der aktuellen Lösung (curr_val)
+            [6] Aktuelle Lösung (curr_sol)
+            [7] Fehleranzahl des aktuellen Kandidaten (cand_val)
+            [8] Kandidat (cand_sol)
+            [9] Differenz (diff = cand_val - curr_val)
+    """
+    if obj(init_sol) == 0:
+        return [init_sol, obj(init_sol), [[0] * n_iter for _ in range(10)]]
     temperatures = [get_temp(temp, k) for k in range(n_iter)]
     data = []
     if write_data:
@@ -942,18 +1015,21 @@ def simulated_annealing(init_sol, n_iter, temp, param=1.0, write_data=1):
         data[0] = [*range(n_iter)]
         data[1] = temperatures
     best_sol = copy.deepcopy(init_sol)  # beste Lösung, wird am Schluss ausgegeben
-    best_val = objective(best_sol)
+    best_val = obj(best_sol)
     curr_sol, curr_val = best_sol, best_val
+    max_obj = max_errors(init_sol)
     for i in range(n_iter):
         t1 = time.perf_counter()
         if best_val == 0:
             break
-        cand_sol = gen_cand_morph(curr_sol, 1, 0)
+        cand_sol = gen_cand(curr_sol, curr_val, max_obj, swap_and_rotate=1, swap_or_rotate=0,
+                            adapt_operations=adapt_operations, morphing=morphy)
         t2 = time.perf_counter()
-        cand_val = objective(cand_sol)
+        cand_val = obj(cand_sol)
         t3 = time.perf_counter()
         diff = cand_val - curr_val
-        # print("Iteration #{i}, Differenz cand - curr: {diff}")
+        if print_iteration:
+            print(f"Iteration #{i}, Differenz cand - curr: {diff}")
         if cand_val - best_val < 0:
             best_sol = cand_sol
             best_val = cand_val
@@ -977,74 +1053,7 @@ def simulated_annealing(init_sol, n_iter, temp, param=1.0, write_data=1):
             data[8][i] = cand_sol
             data[9][i] = diff
         t4 = time.perf_counter()
-        # print(f"SIM: gen_cand: {t2 - t1}, obj_gen: {t3 - t2}, elapsed: {t4 - t1}")
-    return [best_sol, best_val, data]
-
-
-def sim_ann_gen(init_sol, n_iter: int, temp: int, param=5.0, morphing=0, write_data=1):
-    """
-    Simulated annealing Algorithmus
-    :param init_sol: Startlösung
-    :param n_iter: Anzahl der Schritte im Algorithmus
-    :param temp: Starttemperatur
-    :param param: Abkühlungsparameter, sorgt dafür, dass schneller nur noch bessere Lösungen akzeptiert werden
-    :param morphing: Soll der Algorithmus versuchen, die Form der Lösung zu verändern?
-    :param write_data: Sollen Daten geschrieben werden?
-    :return: Data-Array mit 10 Zeilen
-            [0] Anzahl der Schritte
-            [1] Temperatur (temp)
-            [2] Annahmewahrscheinlichkeit einer schlechteren Lösung (p)
-            [3] Fehleranzahl der besten Lösung (best_val)
-            [4] Beste Lösung (best_sol)
-            [5] Fehleranzahl der aktuellen Lösung (curr_val)
-            [6] Aktuelle Lösung (curr_sol)
-            [7] Fehleranzahl des aktuellen Kandidaten (cand_val)
-            [8] Kandidat (cand_sol)
-            [9] Differenz (diff = cand_val - curr_val)
-    """
-    if obj_gen(init_sol) == 0:
-        return [init_sol, obj_gen(init_sol), [[0] * n_iter for _ in range(10)]]
-    temperatures = [get_temp(temp, k) for k in range(n_iter)]
-    data = []
-    if write_data:
-        data = [[0] * n_iter for _ in range(10)]
-        data[0] = [*range(n_iter)]
-        data[1] = temperatures
-    best_sol = copy.deepcopy(init_sol)  # beste Lösung, wird am Schluss ausgegeben
-    best_val = obj_gen(best_sol)
-    curr_sol, curr_val = best_sol, best_val
-    for i in range(n_iter):
-        # t1 = time.perf_counter()
-        if best_val == 0:
-            break
-        cand_sol = gen_cand_morph(curr_sol, 1, morphing)
-        # t2 = time.perf_counter()
-        cand_val = obj_gen(cand_sol)
-        # t3 = time.perf_counter()
-        diff = cand_val - curr_val
-        print(f"Iteration #{i}, Differenz cand - curr: {diff}")
-        if cand_val - best_val < 0:
-            best_sol = cand_sol
-            best_val = cand_val
-        t = temperatures[i]
-        if diff < 0:
-            p = 1
-        else:
-            p = calc_acceptance(param * diff, t)  # multiplikativer Parameter Optimierung? Tradeoff wenige Schritte,
-            # aber seltenes Lösungsfinden
-        if np.random.rand() < p:
-            curr_sol, curr_val = cand_sol, cand_val
-        if write_data:
-            data[2][i] = p
-            data[3][i] = best_val
-            data[4][i] = best_sol
-            data[5][i] = curr_val
-            data[6][i] = curr_sol
-            data[7][i] = cand_val
-            data[8][i] = cand_sol
-            data[9][i] = diff
-        # t4 = time.perf_counter()
-        # print(f"SIM-G: gen_cand: {t2 - t1}, obj_gen: {t3 - t2}, elapsed: {t4 - t1}")
+        # print(f"SIM: gen_cand: {t2 - t1}, obj: {t3 - t2}, elapsed: {t4 - t1}")
     return [best_sol, best_val, data]
 
 
@@ -1059,7 +1068,7 @@ def random_sol_mean(n_gens, all_tiles):
     best = 100
     for k in range(n_gens):
         sol = gen_random_sol(all_tiles, n_tiles=7, kangaroo=0, sample=1, ascending=0, randomness=0, standard=1)
-        sol_eval = objective(sol)
+        sol_eval = obj(sol)
         if sol_eval < best:
             best = sol_eval
         evaluations_sum += sol_eval
@@ -1102,7 +1111,7 @@ def find_param(sol, steps, temp, lim_low, lim_up, stepsize, n_runs, all_tiles):
         sum_steps = 0
         for k in range(n_runs):
             sol = gen_random_sol(all_tiles, n_tiles=7, kangaroo=0, sample=1, ascending=0, randomness=0, standard=1)
-            _, _, data = simulated_annealing(sol, steps, temp, param)
+            _, _, data = simulated_annealing(sol, steps, temp, param, 0, 0, 1, 0)
             if 0 in data[3]:
                 sol_found += 1
                 sum_steps += data[3].index(0)  # Anzahl der Schritte bis zum Finden der Lösung
@@ -1152,7 +1161,8 @@ def solve_flowers(puzzles, all_tiles, n_iter, temp, param=1.0, write_file=0, fil
         datastream = []
         starting_sol = gen_start_sol(list(puzzle), all_tiles, 1)
         while opt_val > 0 and attempts < 10:
-            opt_sol, opt_val, datastream = simulated_annealing(starting_sol, n_iter, temp, param)
+            opt_sol, opt_val, datastream = simulated_annealing(starting_sol, n_iter, temp, param,
+                                                               morphy=0, write_data=1)
             attempts += 1
         results[0][index] = opt_sol  # Optimallösung
         results[1][index] = opt_val  # bester Fehlerwert
@@ -1220,7 +1230,7 @@ def find_all_flower_sols(puzzle, attempts, all_tiles, n_iter, temp, param=1.0, w
     for k in range(attempts):
         print(k)
         starting_sol = gen_start_sol(list(puzzle), all_tiles, standard=1)
-        opt_sol, opt_val, _ = simulated_annealing(starting_sol, n_iter, temp, param, write_data=0)
+        opt_sol, opt_val, _ = simulated_annealing(starting_sol, n_iter, temp, param, morphy=0, write_data=0)
         if opt_val == 0:
             if len(solutions[0]) == 0:
                 solutions[0].append(std(opt_sol))
@@ -1245,7 +1255,7 @@ def find_all_flower_sols(puzzle, attempts, all_tiles, n_iter, temp, param=1.0, w
     return solutions
 
 
-def find_unsolvable(attempts_to_solve, attempts_to_search, n_iter, temp, param):
+def find_unsolvable_flower(attempts_to_solve, attempts_to_search, n_iter, temp, param):
     """
     Versucht, ein Blumenpuzzle zu finden, welches auch nach 10 Anläufen nicht gelöst werden kann, Verdacht
     auf Unlösbarkeit?
@@ -1257,20 +1267,23 @@ def find_unsolvable(attempts_to_solve, attempts_to_search, n_iter, temp, param):
     :return: "Unlösbares" Puzzle oder maximale Anzahl an Versuchen bis zur Lösung
     """
     max_attempts = 0
+    max_sol = []
     for k in range(attempts_to_search):
         print(f"Attempt #{k}")
-        sol = gen_random_sol(tiles_complete, n_tiles=7, kangaroo=0, sample=0, ascending=0, randomness=1)
-        sol_val = obj_gen(sol)
+        sol = gen_random_sol(tiles_complete, n_tiles=7, kangaroo=0, sample=0, ascending=0, randomness=1, standard=1)
+        sol_val = obj(sol)
         counter = 0
         while counter < attempts_to_solve and sol_val > 0:
-            sol, sol_val, _ = sim_ann_gen(sol, n_iter, temp, param)
+            sol, sol_val, _ = simulated_annealing(sol, n_iter, temp, param, 0, 0, 0)
             counter += 1
             if counter > max_attempts:
                 max_attempts = counter
+                max_sol = sol
         if counter == attempts_to_solve:
+            sol.insert(0, [*range(7)])
             print(sol)
             return
-    print(f"Kein unlösbares Puzzles gefunden, meiste Versuche: {max_attempts}")
+    print(f"Kein unlösbares Puzzles gefunden, meiste Versuche: {max_attempts} für: {max_sol}")
 
 
 def elim_ident(filename):
@@ -1306,10 +1319,16 @@ def elim_ident(filename):
             file.write(str(sol) + '\n')
 
 
-def std(solution):
+def std(solution, standard=1):
     """Lösung einheitlich formatieren, Orientierung des mittleren Steins ist 0"""
-    temp_sol = copy.deepcopy(solution)
-    return rotate_sol(temp_sol, n_rotations=6 - solution[-1][0])
+    if not standard:
+        temp_sol = copy.deepcopy(solution[1:])
+    else:
+        temp_sol = copy.deepcopy(solution)
+    out = rotate_sol(temp_sol, n_rotations=6 - solution[-1][0])
+    if not standard:
+        out.insert(0, [*range(len(out[0]))])
+    return out
 
 
 def standardize_sols(solutions):
@@ -1326,9 +1345,9 @@ def find_sol_rand(runs, all_tiles, puzzle=None, conf=0.95):
     :param runs: Anzahl der Versuche (ein Versuch läuft bis eine Lösung gefunden wurde)
     :param all_tiles: Alle Spielsteine codiert
     :param puzzle: optional ein Puzzle welches gelöst werden soll
-    :param conf: Konfidenz für die Angabe der Anzahl der Lösungen des Puzzles auf Grundlage der durchschnittlichen Anzahl
-                 an benötigten Schritten bis zum Finden einer Lösung
-    :return: Durchnittswert bis zum Finden einer Lösung, Generierungen bis Lösung pro Versuch als array
+    :param conf: Konfidenz für die Angabe der Anzahl der Lösungen des Puzzles auf Grundlage der durchschnittlichen
+                 Anzahl an benötigten Schritten bis zum Finden einer Lösung
+    :return: Durchschnittswert bis zum Finden einer Lösung, Generierungen bis Lösung pro Versuch als array
     """
     attempts = 0
     steps = []
@@ -1343,7 +1362,7 @@ def find_sol_rand(runs, all_tiles, puzzle=None, conf=0.95):
         # curr = []
         while current_score > 0:
             curr = gen_start_sol(curr[0], all_tiles, 1)
-            current_score = objective(curr)
+            current_score = obj(curr)
             run_steps += 1
         print(curr)
         attempts += run_steps
@@ -1370,18 +1389,18 @@ def random_pyramid(attempts, all_tiles):
 
     def gen_sol():
         sol = [[] for _ in range(4)]
-        sol[0] = [0, 1, 2, 3, 10, 11, 12, 24, 25, 26, 27, 44, 45, 46, 47, 48, 69, 70, 71, 72, 73, 74, 100, 101,
-                  102, 103, 104, 105, 106, 137, 138, 139, 140, 141, 142, 143, 144, 180, 181, 182, 183, 184,
-                  185, 186, 187, 188, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238]
+        sol[0] = [0, 1, 2, 3, 9, 10, 11, 22, 23, 24, 25, 41, 42, 43, 44, 45, 66, 67, 68, 69, 70, 71,
+                  97, 98, 99, 100, 101, 102, 103, 134, 135, 136, 137, 138, 139, 140, 141, 177, 178, 179,
+                  180, 181, 182, 183, 184, 185, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235]
         sol[1] = list(np.random.permutation([*range(56)]))
         sol[2] = [all_tiles[i] for i in sol[1]]
         sol[3] = [int(random.uniform(0, 6)) for _ in range(56)]
         return sol
 
-    opt_val = obj_gen(gen_sol())
+    opt_val = obj(gen_sol())
     for k in range(attempts):
         cand = gen_sol()
-        cand_val = obj_gen(cand)
+        cand_val = obj(cand)
         if cand_val < opt_val:
             opt_val = cand_val
         data[0].append(k)
@@ -1399,18 +1418,96 @@ def random_pyramid(attempts, all_tiles):
 
 
 def flower_one_tile(all_tiles):
+    """Blumen mit nur einem einzigen Stein finden"""
     vals = []
     for k in range(len(all_tiles)):
         print(f"Blume: {k}")
         sol = gen_start_sol([k for _ in range(7)], tiles_complete, 1)
-        sol, val, _ = simulated_annealing(sol, 25000, 500, 5, 1)
-        # draw_solution(sol)
+        sol, val, _ = simulated_annealing(sol, 25000, 500, 5, 0, 0, 0, 0)
+        sol = std(sol, standard=1)
+        draw_sol(sol)
         vals.append(val)
         print(val)
     for g in range(4):
         print(vals[g * 14:g * 14 + 14])
     print("\n")
     print(sum(vals))
+
+
+def read_sols_from_file(filename, standard=0):
+    """Liest .txt aus mit Lösungen in jeder Zeile und gibt diese als list aus"""
+    def parse_line(line):
+        """Parses a single line of the text file into a structured solution."""
+        elements = line.strip()[1:-1].split("], [")
+        parsed_elements = [
+            list(map(int, elements[0][1:].split(", "))),
+            elements[1][1:-1].split("', '"),
+            list(map(int, elements[2][0:-1].split(", ")))
+        ]
+        return parsed_elements
+
+    #
+    with open(filename, 'r') as file:
+        lines = file.readlines()
+    #
+    sols = [parse_line(line) for line in lines]
+    sols = standardize_sols(sols)
+    if not standard:
+        if len(sols[0]) == 3:  # Eintrag für die Felder einfügen
+            for sol in sols:
+                sol.insert(0, [*range(len(sol[0]))])
+    return sols
+
+
+def find_best_sols(filename, top=None):
+    """
+    Sucht aus einer Textdatei mit Lösungen die mit den längsten Linien/Schleifen heraus und gibt diese
+    sortiert aus
+    :param filename: Dateiname
+    :param top: Nur die top x Lösungen ausgeben
+    :return: zip-Array mit (lsg, rating)
+    """
+
+    def rate_sol(line_loop_data):
+        """Funktion zur Bewertung einer Lösung, Schleifen werden doppelt gewertet im Vergleich zu Linien"""
+        rating = sum([k[0] for k in line_loop_data]) + 2 * sum([k[1] for k in line_loop_data])  # Linien:Schleife 1:2
+        return rating
+
+    ratings = []
+
+    sols = read_sols_from_file(filename, standard=0)
+    if top is None:  # Wie viele Lösungen sollen ausgegeben werden
+        top = len(sols)
+    for index, cand in enumerate(sols):  # Lösungen bewerten und ordnen
+        data = get_longest_connection(cand)
+        ratings.append(rate_sol(data))
+    cand_rating_zip = list(zip(sols, ratings))
+    cand_rating_zip = sorted(cand_rating_zip, key=lambda x: x[1], reverse=True)
+    for t in range(top):
+        print(cand_rating_zip[t])
+    # print(cand_rating_zip)
+
+
+def try_puzzle(sol, steps, temp, param, attempts=-1):
+    """Versucht ein Puzzle zu lösen, bis es fehlerfrei ist oder die optionale Anzahl der
+     maximalen Versuche überschritten wurde"""
+    itcounter = 0
+    dolo = 1
+    best_dolo = obj(sol)
+    best_solo = sol
+    solo = sol
+    while dolo > 0:
+        itcounter += 1
+        solo, dolo, _ = simulated_annealing(sol, steps, temp, param, morphy=0, write_data=0, print_iteration=False)
+        print(f"it: {itcounter}, obj: {dolo}")
+        if dolo < best_dolo:
+            best_solo = solo
+            best_dolo = dolo
+        if itcounter == attempts:
+            print(f"No solution found after {itcounter} attempts")
+            print(f"Best val: {best_dolo}, sol: {best_solo}")
+            return
+    print(solo)
 
 
 def main():
@@ -1431,31 +1528,41 @@ def main():
            [5, 5, 1, 3, 1, 4, 5]]
     unsol = [[0, 1, 2, 3, 4, 5, 6], [51, 41, 50, 47, 9, 40, 31],
              ['114224', '141433', '121424', '121442', '113223', '113344', '114334'], [3, 1, 0, 4, 0, 0, 3]]
+    candidates = [[[13, 28, 8, 32, 22, 47, 53], ['121233', '114343', '121323', '131443', '323424', '121442', '221441'],
+                   [2, 4, 3, 0, 2, 5, 4]],
+                  [[53, 1, 4, 29, 16, 17, 31], ['221441', '212313', '131223', '313414', '224343', '332442', '114334'],
+                   [0, 3, 0, 2, 2, 3, 5]],
+                  [[8, 40, 31, 7, 5, 2, 39], ['121323', '113344', '114334', '112233', '121332', '131322', '331441'],
+                   [2, 3, 0, 4, 4, 1, 4]],
+                  [[9, 22, 48, 19, 33, 53, 1], ['113223', '323424', '114242', '242433', '141334', '221441', '212313'],
+                   [2, 3, 5, 5, 3, 0, 5]],  # gelöst, Fehler in Codierung von Stein 19
+                  [[28, 32, 52, 13, 53, 17, 3], ['114343', '131443', '141242', '121233', '221441', '332442', '112332'],
+                   [4, 1, 2, 3, 5, 2, 2]]]  # der letzte wurde in 50 Versuchen nicht gelöst
     rand_sol_big = [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
                     [37, 33, 30, 40, 48, 23, 1, 47, 15, 16, 4, 43, 29, 18, 50, 6, 24, 0, 39],
                     ['113443', '141334', '131344', '113344', '114242', '223443', '212313', '121442',
                      '242343', '224343', '131223', '212414', '313414', '223434', '121424', '113232',
                      '232434', '112323', '331441'],
                     [1, 3, 3, 0, 5, 3, 3, 3, 4, 0, 3, 2, 4, 1, 0, 3, 5, 2, 5]]
-    unsolvable_pyramid = [[0, 1, 2, 3, 10, 11, 12, 24, 25, 26, 27, 44, 45, 46, 47, 48, 69, 70, 71, 72, 73, 74, 100, 101,
-                           102, 103, 104, 105, 106, 137, 138, 139, 140, 141, 142, 143, 144, 180, 181, 182, 183, 184,
-                           185, 186, 187, 188, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238],
-                          [28, 48, 31, 45, 39, 30, 47, 22, 1, 3, 34, 40, 51, 24, 13, 52, 6, 29, 27, 41, 38, 12, 10, 53,
-                           4, 32, 55, 21, 16, 17, 23, 14, 49, 18, 26, 8, 54, 2, 36, 25, 5, 20, 37, 46, 15, 9, 44, 35,
-                           33, 43, 11, 7, 50, 42, 0, 19],
-                          ['114343', '114242', '114334', '112442', '331441', '131344', '121442', '323424', '212313',
-                           '112332', '113434', '113344', '114224', '232434', '121233', '141242', '113232', '313414',
-                           '242334', '141433', '131434', '113322', '131232', '221441', '131223', '131443', '121244',
-                           '223344', '224343', '332442', '223443', '232344', '112244', '223434', '224433', '121323',
-                           '114422', '131322', '141343', '224334', '121332', '232443', '113443', '141224', '242343',
-                           '113223', '141422', '114433', '141334', '212414', '221331', '112233', '121424', '112424',
-                           '112323', '243324'],
-                          [1, 1, 4, 3, 2, 1, 5, 3, 4, 4, 5, 0, 2, 0, 5, 5, 3, 5, 2, 3, 2, 1, 1,
-                           0, 4, 2, 5, 1, 3, 4, 2, 5, 2, 0, 0, 3, 5, 0, 1, 5, 2, 0, 0, 3, 0, 5,
-                           4, 3, 0, 4, 1, 4, 0, 5, 1, 4]]
+    unsol_pyr = [[0, 1, 2, 3, 9, 10, 11, 22, 23, 24, 25, 41, 42, 43, 44, 45, 66, 67, 68, 69, 70, 71,
+                  97, 98, 99, 100, 101, 102, 103, 134, 135, 136, 137, 138, 139, 140, 141, 177, 178, 179,
+                  180, 181, 182, 183, 184, 185, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235],
+                 [28, 48, 31, 45, 39, 30, 47, 22, 1, 3, 34, 40, 51, 24, 13, 52, 6, 29, 27, 41, 38, 12, 10, 53,
+                  4, 32, 55, 21, 16, 17, 23, 14, 49, 18, 26, 8, 54, 2, 36, 25, 5, 20, 37, 46, 15, 9, 44, 35,
+                  33, 43, 11, 7, 50, 42, 0, 19],
+                 ['114343', '114242', '114334', '112442', '331441', '131344', '121442', '323424', '212313',
+                  '112332', '113434', '113344', '114224', '232434', '121233', '141242', '113232', '313414',
+                  '242334', '141433', '131434', '113322', '131232', '221441', '131223', '131443', '121244',
+                  '223344', '224343', '332442', '223443', '232344', '112244', '223434', '224433', '121323',
+                  '114422', '131322', '141343', '224334', '121332', '232443', '113443', '141224', '242343',
+                  '113223', '141422', '114433', '141334', '212414', '221331', '112233', '121424', '112424',
+                  '112323', '242433'],
+                 [1, 1, 4, 3, 2, 1, 5, 3, 4, 4, 5, 0, 2, 0, 5, 5, 3, 5, 2, 3, 2, 1, 1,
+                  0, 4, 2, 5, 1, 3, 4, 2, 5, 2, 0, 0, 3, 5, 0, 1, 5, 2, 0, 0, 3, 0, 5,
+                  4, 3, 0, 4, 1, 4, 0, 5, 1, 4]]
     # rot_sol = rotate_sol(solution)
-    # draw_solution(solution)
-    # draw_solution(rot_sol, tiles)
+    # draw_sol(solution)
+    # draw_sol(rot_sol, tiles)
 
     # Lösung durch Zufall finden, daraus Funktion schreiben, welche die durchschnittliche Anzahl der Schritte
     # bis zur ersten fehlerfreien Lösung ausgibt
@@ -1465,8 +1572,8 @@ def main():
     steps = 25000
 
     # Simulated annealing mit Blumenpuzzle
-    # opt_sol, opt_val, datastream = simulated_annealing(start_sol, steps, temperature, 5)
-    # draw_solution(opt_sol)
+    # opt_sol, opt_val, datastream = simulated_annealing(start_sol, steps, temperature, 5, 0, 1)
+    # draw_sol(opt_sol)
     # print(f"Fehleranzahl der besten Lösung: {opt_val}")
     # print(opt_sol)
     # print_best_sols(datastream)
@@ -1495,8 +1602,8 @@ def main():
 
     # Simulated annealing von allgemeinen Puzzles mit unterschiedlicher Tile-Anzahl und Formen
     # big_sol = random_sol_gen(tiles_complete, n_tiles=7, kangaroo=0, sample=0, ascending=0, randomness=1)
-    # opt_sol, opt_val, datastream = sim_ann_gen(rsx_unsol, steps, temperature, 5)
-    # draw_sol_gen(opt_sol)
+    # opt_sol, opt_val, datastream = simulated_annealing(rsx_unsol, steps, temperature, 5)
+    # draw_sol(opt_sol)
     # print(f"Fehleranzahl der besten Lösung: {opt_val}")
     # print(opt_sol)
     # print_best_sols(datastream)
@@ -1505,16 +1612,22 @@ def main():
     # # plot_val_over_steps(datastream)
     # plot_cand_curr_over_steps(datastream)
 
+    # Versuch, unlösbare Puzzles zu finden (Blumen)
     # find_unsolvable(attempts_to_solve=10, attempts_to_search=100, n_iter=20000, temp=500, param=5)
-    # elim_ident("")
 
-    # solo, dolo, data = sim_ann_gen(unsolvable_pyramid, 1000, 50, 10, 1)
-    # draw_sol_gen(solo)
+    # solo, dolo, data = simulated_annealing(rand_sol, 10000, 500, 5, 0, 0, write_data=1, print_iteration=1)
+    # draw_sol(solo)
+    # print(solo)
     # plot_cand_curr_over_steps(data)
     # plot_val_over_steps(data)
+    # plot_p_over_steps(data)
+    # plot_t_over_steps(data)
+    # print(get_longest_connection(solo))
 
+    # Blumen mit jeweils nur dem gleichen Stein versuchen zu lösen
+    # flower_one_tile(tiles_complete)
 
-    draw_sol_gen(solx)
+    # try_puzzle(start_sol, 20000, 500, 1, 50)
 
 
 if __name__ == "__main__":
