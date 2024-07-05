@@ -1,14 +1,17 @@
 import time
-
+import csv
 import numpy as np
 import random as random
 from itertools import combinations
 from itertools import groupby
 import copy
 import datetime
+import os
+import glob
 
 import math
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 from matplotlib.patches import Polygon, Arc
 
 # to do: allgemeine Lösungen zulassen, funktionen verallgemeinern, alle 14C7 Blumen lösen
@@ -41,6 +44,11 @@ tiles_complete = ['112323', '212313', '131322', '112332', '131223', '121332', '1
                   '112424', '212414', '141422', '112442', '141224', '121442', '114242',
                   '112244', '121424', '114224', '141242', '221441', '114422', '121244']
 
+tiles_triple_cross = ['123123', '132132',  # die nicht verwendeten Steine mit drei geraden Verbindungen
+                      '234234', '243243',
+                      '134134', '143143',
+                      '124124', '142142']
+
 permutation = [8, 4, 10, 13, 1, 11, 7, 14, 6, 5, 9, 2, 3, 12,
                31, 32, 18, 16, 17, 19, 33, 21, 35, 15, 34, 22, 23, 20,
                38, 40, 36, 26, 41, 27, 37, 28, 39, 30, 42, 24, 25, 29,
@@ -54,7 +62,7 @@ yellow_tiles = [1, 2, 3, 9, 12, 17, 20, 21, 22, 23, 31, 44]
 
 blue_rainbow = [[0, 2, 3, 9, 10, 11, 22, 23, 24, 25], [3, 6, 32, 38, 0, 8, 7, 36, 29, 54],
                 ['112332', '113232', '131443', '131434', '112323', '121323', '112233', '141343', '313414', '114422'],
-                [1, 1, 2, 3, 1, 0, 0, 1, 2, 1]]
+                [1, 1, 2, 3, 1, 0, 0, 1, 2, 1]]  # blue_tiles in Känguru-Notation
 red_rainbow = [[0, 2, 3, 9, 10, 11, 22, 23, 24, 25, 41, 42, 43, 44, 45],
                [17, 37, 33, 5, 19, 1, 35, 39, 40, 16, 41, 9, 2, 31, 23],
                ['332442', '113443', '141334', '121332', '243324', '212313',
@@ -65,26 +73,143 @@ pyramid1 = [21, 3, 15, 13, 5, 2, 35, 9, 18, 17, 33, 20, 10, 12, 8]  # in offizie
 pyramid2 = [23, 45, 25, 28, 16, 15, 13, 5, 30, 31, 33, 19, 20, 8, 7]
 pyramid3 = [23, 45, 47, 49, 5, 51, 50, 6, 39, 33, 19, 54, 53, 55, 41]
 
-tiles_front_back = [[] * 7 for _ in range(2)]  # Liste der Spielsteine mit Vorder- und Rückseite in jeweils
-tiles_front_back[0] = [tiles[2 * i] for i in range(7)]  # einer Zeile
-tiles_front_back[1] = [tiles[2 * i + 1] for i in range(7)]
-tiles_front_back_indices = [[] * 7 for _ in range(2)]
-tiles_front_back_indices[0] = [2 * i for i in range(7)]
-tiles_front_back_indices[1] = [2 * i + 1 for i in range(7)]
 
-# Erstellen Sie eine Liste aller Kombinationen von 7 Elementen aus dem Vektor mit den Einträgen von 0 bis 13
+# Erstellen einer Liste aller Kombinationen von 7 Elementen aus dem Vektor mit den Einträgen von 0 bis 13
 # Codierung für alle möglichen Puzzles, mathematisch 14C7
 all_puzzles = list(combinations([*range(14)], 7))
+# all_puzzles = [list(k) for k in list(combinations([*range(14)], 7))]
 
 
-def t2kang(tile_list, perm):
+def generate_pairings(n):
+    """Erstellt die 135135 verschiedenen Verklebungen von Vorder- und Rückseite der n = 14 Spielsteine"""
+    def perfect_matchings(nums):
+        if len(nums) == 2:
+            yield [tuple(nums)]
+        else:
+            first = nums[0]
+            for i in range(1, len(nums)):
+                pair = (first, nums[i])
+                remaining = nums[1:i] + nums[i + 1:]
+                for rest in perfect_matchings(remaining):
+                    yield [pair] + rest
+
+    numbers = list(range(n))
+    temp = list(perfect_matchings(numbers))
+    pairings_tuple = [tuple(k[i] for k in f for i in range(2)) for f in temp]
+    return pairings_tuple
+
+
+def read_num_sols_per_puzzle(filename=None):
+    """Liest die Textdatei mit den Lösungen pro Puzzle aus"""
+    if filename is None:
+        filename = "3432__10000.txt"
+    sols_pp = []
+    with open(filename, 'r') as file:
+        lines = file.readlines()
+    for line in lines:
+        sols_pp.append(int(line))
+    return tuple(sols_pp)
+
+
+def read_sols_per_pairing(csv_filename=None):
+    """Lösungen pro Paarung aus csv-Datei auslesen in Liste"""
+    if csv_filename is None:
+        csv_filename = "sols_3432_pairings.csv"
+    spps = []
+    with open(csv_filename, 'r') as file:
+        csv_reader = csv.reader(file)
+        for row in csv_reader:
+            spps.append(int(row[1]))  # Stelle sicher, dass die Werte als Integer gespeichert werden
+    return tuple(spps)
+
+
+def calc_sols_per_pairing(pairings, puzzle_list, sols_per_puzzle=None, write_csv=1, csv_path=None, top=100):
+    """
+    Gibt die Anzahl der Lösungen pro möglicher Verklebung an
+    :param csv_path: Pfad für die csv-Datei angeben
+    :param pairings: die 135135 möglichen Verklebungen, List von Tupeln
+    :param sols_per_puzzle: Tupel mit Lösungen pro 3432 Puzzles, wird noch ausgerechnet
+    :param puzzle_list: Liste der Tupel der 3432 möglichen Puzzles, all_puzzles
+    :param write_csv: die Ergebnisse in eine csv-Datei schreiben
+    :param top: die top n Verklebungn mit den meisten Lösungen
+    :return: Liste mit 135135 Einträgen, erster Eintrag ist die Känguru-Verklebung mit 57.455 Lösungen
+    """
+    if sols_per_puzzle is None:
+        sols_per_puzzle = read_num_sols_per_puzzle("3432__10000.txt")
+    sols_per_pairing = []  # die Anzahl der Lösungen je Paarung von Steinen, für Känguruversion 57.455
+    for index, pairing in enumerate(pairings):  # für jede Paarung
+        print(index)
+        puzzles = get_puzzles(pairing)  # die 128 möglichen Puzzles pro Paarung holen, insgesamt 3432 versch. Puzzles
+        sols_per_curr_pairing = 0
+        for puzzle in puzzles:  # je mit der aktuellen Paarung möglichem Puzzle
+            puzzle_index = puzzle_list.index(puzzle)  # Index des betrachteten Puzzles in der Liste der 3432 Puzzles
+            sols_per_curr_pairing += sols_per_puzzle[puzzle_index]  # Anzahl Lösungen d. akt. Puzzles aus Liste addieren
+        sols_per_pairing.append(sols_per_curr_pairing)  # Gesamtzahl der Lösungen der Verklebung der Ausgabe hinzufg.
+    if write_csv:
+        filename = 'sols_3432_pairings.csv'
+        if csv_path is not None:
+            filename = os.path.join(csv_path, filename)
+        with open(filename, 'w', newline='') as file:
+            writer = csv.writer(file)
+            for k in range(len(sols_per_pairing)):
+                writer.writerow([pairings[k], sols_per_pairing[k]])
+    spp_zippo = list(zip(pairings, sols_per_pairing))
+    spp_zippo = sorted(spp_zippo, key=lambda x: x[1], reverse=True)  # Liste Paarung/Lösungen absteigend sortieren
+    return spp_zippo[:top]
+
+
+def plot_pairing_landscape(csv_filename=None, n=5):
+    """Anzahl der Lösungen der 135135 Verklebungen plotten"""
+    if csv_filename is None:
+        csv_filename = "sols_3432_pairings.csv"
+    spps = read_sols_per_pairing(csv_filename)
+    fig, ax = plt.subplots()
+    ax.scatter(range(len(spps)), spps, s=3)
+    ax.set_xlabel('Pairing')
+    ax.set_ylabel('Solutions')
+    # Setze den MaxNLocator auf der y-Achse
+    ax.yaxis.set_major_locator(MaxNLocator(n))
+    plt.show()
+
+
+def plot_puzzle_landscape(sols_filename=None, n=10):
+    """Anzahl Lösungen der 3432 Puzzles plotten"""
+    if sols_filename is None:
+        sols_filename = "3432__10000.txt"
+    sppz = read_num_sols_per_puzzle(sols_filename)
+    fig, ax = plt.subplots()
+    ax.scatter(range(len(sppz)), sppz, s=3)
+    ax.plot(range(len(sppz)), [np.mean(sppz) for _ in range(len(sppz))], c='red')
+    ax.set_xlabel('Puzzle No.')
+    ax.set_ylabel('Solutions')
+    # Setze den MaxNLocator auf der y-Achse
+    ax.yaxis.set_major_locator(MaxNLocator(n))
+    plt.show()
+
+
+def t2kang(tile_list, perm=None):
     """
     Stein-Liste von offizieller Notation in Känguru-Notation umwandeln
     :param tile_list: List der Steine in offizieller Notation
-    :param perm: Permutation die die Notationen aufeinander abbildet
+    :param perm: Permutation, welche die Notationen aufeinander abbildet
     :return: Känguru-Notation
     """
+    if perm is None:
+        perm = permutation
     out = [perm.index(k) for k in tile_list]
+    return out
+
+
+def kang2t(tile_list, perm=None):
+    """
+    Stein-Liste von Känguru-Notation in offizielle Notation umwandeln
+    :param tile_list: List der Steine in offizieller Notation
+    :param perm: Permutation, welche die Notationen aufeinander abbildet
+    :return: offizielle Notation als Liste
+    """
+    if perm is None:
+        perm = permutation
+    out = [perm[k] for k in tile_list]
     return out
 
 
@@ -268,16 +393,44 @@ def gen_cand(curr, val=None, max_err=None, swap_and_rotate=1, swap_or_rotate=0,
     for j, swap in enumerate(swap_indices):
         cand[1][swap] = swap_tiles_perm[j]
         cand[2][swap] = tiles_copy[swap_indices_permutation[j]]
-    print(f"Anzahl der Vertauschungen/Rotationen: {n_swaps}, {n_rotations}")
+    # print(f"Anzahl der Vertauschungen/Rotationen: {n_swaps}, {n_rotations}")
     if standard:
         return cand[1:]
     return cand
 
 
+# def rotate_sol(sol, n_rotations=1):  # bei allg. Lsg.: Ringe um den Ursprung verwenden
+#     """
+#     Eine eingegebene Lösung wird um eine Position im UZS rotiert
+#     :param n_rotations: Anzahl der Rotationen, im UZS, falls > 0, gegen UZS, falls < 0, default 1
+#     :param sol: Lösung
+#     :return: rotierte Lösung
+#     """
+#
+#     def shift_tiles(outer_tiles, offset: int):
+#         """
+#         :param outer_tiles: eine Liste mit den Nummern der Spielsteine
+#         :param offset: um wie viele Stellen werden die Steine von rechts nach links (vlnr für offset < 0) verschoben
+#         :return: die verschobenen Steine
+#         """
+#         return [outer_tiles[(i + offset) % 6] for i in range(6)]
+#
+#     tile_list = [*range(1, 7)]
+#     sol_rot = copy.deepcopy(sol)
+#     perm = shift_tiles(tile_list, n_rotations)
+#     for j in range(1, 7):  # äußere Steine werden n_rotations Positionen in der Systematik weitergeschoben
+#         sol_rot[0][j] = sol[0][perm[j - 1]]  # [(j + 4) % 6 + 1] gegen UZS
+#         sol_rot[1][j] = sol[1][perm[j - 1]]  # [(j % 6) + 1] im UZS
+#         sol_rot[2][j] = sol[2][perm[j - 1]]  # es muss noch rotiert werden
+#     for t in range(7):  # alle (auch mittleren) Steine um n_rotations Positionen im/gegen UZS rotieren
+#         sol_rot[2][t] = (sol_rot[2][t] + n_rotations) % 6
+#     return sol_rot
+
+
 def rotate_sol(sol, n_rotations=1):  # bei allg. Lsg.: Ringe um den Ursprung verwenden
     """
     Eine eingegebene Lösung wird um eine Position im UZS rotiert
-    :param n_rotations: Anzahl der Rotationen, im UZS falls > 0, gegen UZS falls < 0, default 1
+    :param n_rotations: Anzahl der Rotationen, im UZS, falls > 0, gegen UZS, falls < 0, default 1
     :param sol: Lösung
     :return: rotierte Lösung
     """
@@ -290,15 +443,46 @@ def rotate_sol(sol, n_rotations=1):  # bei allg. Lsg.: Ringe um den Ursprung ver
         """
         return [outer_tiles[(i + offset) % 6] for i in range(6)]
 
-    tile_list = [*range(1, 7)]
+    #
+    def update_field(field, ort=1):
+        """Den Feldindex eines Steins aktualisieren, bool ort True, falls im UZS"""
+        num = 1
+        increment = 6
+        if field == 0:
+            return 0
+        while num < field:
+            if num + increment > field:
+                break
+            else:
+                num += increment
+            increment += 6
+        if ort:
+            if field == num:
+                return num + increment - 1
+            else:
+                return field - 1
+        else:
+            if field == num + increment - 1:
+                return num
+            else:
+                return field + 1
+
+    #
     sol_rot = copy.deepcopy(sol)
-    perm = shift_tiles(tile_list, n_rotations)
-    for j in range(1, 7):  # äußere Steine werden n_rotations Positionen in der Systematik weitergeschoben
-        sol_rot[0][j] = sol[0][perm[j - 1]]  # [(j + 4) % 6 + 1] gegen UZS
-        sol_rot[1][j] = sol[1][perm[j - 1]]  # [(j % 6) + 1] im UZS
-        sol_rot[2][j] = sol[2][perm[j - 1]]  # es muss noch rotiert werden
-    for t in range(7):  # alle (auch mittleren) Steine um n_rotations Positionen im/gegen UZS rotieren
-        sol_rot[2][t] = (sol_rot[2][t] + n_rotations) % 6
+    if len(sol_rot) == 3:
+        tile_list = [*range(1, 7)]
+        perm = shift_tiles(tile_list, n_rotations)
+        for j in range(1, 7):  # äußere Steine werden n_rotations Positionen in der Systematik weitergeschoben
+            sol_rot[0][j] = sol[0][perm[j - 1]]  # [(j + 4) % 6 + 1] gegen UZS
+            sol_rot[1][j] = sol[1][perm[j - 1]]  # [(j % 6) + 1] im UZS
+            sol_rot[2][j] = sol[2][perm[j - 1]]  # es muss noch rotiert werden
+        for t in range(7):  # alle (auch mittleren) Steine um n_rotations Positionen im/gegen UZS rotieren
+            sol_rot[2][t] = (sol_rot[2][t] + n_rotations) % 6
+    else:
+        for k in range(len(sol[0])):
+            for f in range(abs(n_rotations)):
+                sol_rot[0][k] = update_field(sol_rot[0][k], np.sign(n_rotations) == 1)  # Steine weiterschieben
+            sol_rot[3][k] = (sol_rot[3][k] + n_rotations) % 6  # Steine rotieren
     return sol_rot
 
 
@@ -581,6 +765,7 @@ def draw_hexagon(ax, position, orientation, tile, size=0.55):
     :return: Matplotlib-Plot
     """
 
+    #
     def find_pairs(tl):
         """
         Die Kantenpaare einer Farbe finden und ausgeben
@@ -597,6 +782,7 @@ def draw_hexagon(ax, position, orientation, tile, size=0.55):
                 prs.append(pair)
         return prs
 
+    #
     def get_middle_edge(edge1, edge2):
         """
         Gibt die mittlere Kante zwischen zwei Kanten zurück, die eine Kante voneinander entfernt sind.
@@ -614,7 +800,9 @@ def draw_hexagon(ax, position, orientation, tile, size=0.55):
         else:
             raise ValueError("Die Kanten sind nicht eine Kante voneinander entfernt.")
 
+    #
     colors = {'1': 'blue', '2': 'yellow', '3': 'red', '4': 'green'}
+    # colors = {'1': 'white', '2': 'white', '3': 'white', '4': 'white'}
     x, y = getCoordinates(position)
     angles = np.arange(- 2 / 3 * np.pi, 4 / 3 * np.pi, np.pi / 3)
     pairs = find_pairs(tile)
@@ -642,7 +830,7 @@ def draw_hexagon(ax, position, orientation, tile, size=0.55):
             continue
         else:
             if edge_pair[3] == 1 or edge_pair[3] == 5:
-                # aneinanderliegende Kanten, Distanz 1, MP des Kreises ist die Ecke des Hexagon
+                # aneinanderliegende Kanten, Distanz 1, MP des Kreises ist die Ecke des Hexagons
                 center = hexagon[(edge_pair[1] - orientation) % 6]
             else:  # Distanz 2 (2 oder 4), also eine Kante zw. zsmgeh. Kanten, MP ist Mitte des Nb der mittleren Kante
                 nbg_edge = (get_middle_edge(edge_pair[0], edge_pair[1]) - orientation) % 6
@@ -667,18 +855,23 @@ def draw_hexagon(ax, position, orientation, tile, size=0.55):
             ax.add_patch(arc)
 
 
-def get_puzzles(tile_combo):
+def get_puzzles(tile_combo, all_tiles=None):
     """
     Von einer Variante der 7 Steine mit Vorder- und Rückseite die 2^7 = 128 Möglichkeiten,
     die Seiten der Steine zu kombinieren ausgeben als Vektoren mit den Steinenummern
-    :param tile_combo: Array mit Dimensionen [2, 7], tiles_front_back
+    :param tile_combo: Liste mit 14 Einträgen, je zwei aufeinanderfolgende Stein-Nummern sind verklebt
     :return: alle Steinkombinationen aus Vorder- und Rückseiten, die mit dieser "Verklebung" möglich sind
     """
+    if all_tiles is None:
+        all_tiles = tiles_complete
     output_puzzles = []
+    output_tile_nums = []
     for i in range(128):
         logical = d2b(i, 7)
-        output_puzzles.append([tile_combo[int(logical[k])][k] for k in range(7)])
-    return output_puzzles
+        output_tile_nums.append(tuple(sorted(tile_combo[2 * k + int(logical[k])] for k in range(7))))
+        # output_puzzles.append([all_tiles[k] for k in output_tile_nums[-1]])
+    # return output_puzzles, output_tile_nums
+    return output_tile_nums
 
 
 def getColor(tile, edge, orientation):
@@ -733,15 +926,17 @@ def gen_random_sol(all_tiles, n_tiles=7, kangaroo=1, sample=0, ascending=0, rand
     return sol_arr
 
 
-def gen_start_sol(combo, all_tiles, standard=0, fields=None):
+def gen_start_sol(combo, standard=0, fields=None, all_tiles=None):
     """
     Eine Startlösung generieren ausgehend von einer beliebigen Kombination der Spielsteine
-    :param fields: Die Felder, auf welche die Steine gelegt werden, default aufsteigend zugewiesen
+    :param fields: die Felder, auf welche die Steine gelegt werden, default aufsteigend zugewiesen
     :param standard: Lösung ohne Einträge der Felder generieren
     :param combo: array mit Steine-Nummern
     :param all_tiles: array mit Codierung aller Steine
     :return: array mit Startlösung
     """
+    if all_tiles is None:
+        all_tiles = tiles_complete
     if fields is None or len(fields) != len(combo):
         fields = [*range(0, len(combo))]
     sol = [[] * len(combo) for _ in range(4)]
@@ -755,12 +950,14 @@ def gen_start_sol(combo, all_tiles, standard=0, fields=None):
 
 
 def obj(sol,  # 6 Fehler diff gut oder schlecht? abhängig von n_tiles
-        discrete=1):  # Kompaktheit der Lösung betrachten, Ringe um 0 mit aufsteigenden Straftermen, Anzahl Aussenkanten?, mit max_errors normalisieren?
+        discrete=1,
+        max_err=None):  # Kompaktheit der Lösung betrachten, Ringe um 0 mit aufsteigenden Straftermen, Anzahl Aussenkanten?, mit max_errors normalisieren?
     """
     Objective-Funktion für verallgemeinerte Lösungen (nicht nur für Blumen), gibt die Anzahl der Fehler an
     (Vorgehen: für jedes Tile die 6 Nachbarn betrachten und die Fehler zählen), langsamer als im Blumen-Fall
-    :param discrete: Die Fehleranzahl diskret Abstufen mit Stufenbreite x, default 1
+    :param discrete: die Fehleranzahl diskret Abstufen mit Stufenbreite x, default 1
     :param sol: Lösung
+    :param max_err: maximale Anzahl der Fehler, falls angegeben, wird relativer Lösungsfortschritt ausgegeben
     :return: Fehleranzahl
     """
     mismatches = 0
@@ -804,9 +1001,11 @@ def obj(sol,  # 6 Fehler diff gut oder schlecht? abhängig von n_tiles
                     visited_edges.add((neighbor_index, (edge + 3) % 6))
                 # t5 = time.perf_counter()
                 # print(f"init: {t2 - t1}, neigh: {t4 - t3}, rest_loop: {t5 - t4}")
-    if mismatches > 0:
+    if mismatches > 0 and discrete > 1:
         out = (mismatches // discrete) + 1  # Bsp 3, (1, 2) -> 1; (3, 4, 5) -> 2 ...
         return out
+    if max_err is not None:
+        return mismatches / max_err
     return mismatches
 
 
@@ -955,15 +1154,18 @@ def plot_cand_curr_over_steps(data):
     plt.show()
 
 
-def get_temp(temp, step):
+def get_temp(temp, step, cooling=None):
     """
     Temperatur berechnen des Systems abhängig von Ausgangstemperatur und Anzahl der getätigten Schritte (= Zeit)
+    :param cooling: Abkühlfaktor
     :param temp: Eingangstemperatur
     :param step: Schrittanzahl
     :return: Ausgangstemperatur
     """
-    # t = temp / (0.2 * float(step + 1))
-    t = 0.996 ** step * temp
+    if cooling is None:
+        t = temp / (0.2 * float(step + 1))
+    else:
+        t = cooling ** step * temp
     return t
 
 
@@ -983,9 +1185,10 @@ def calc_acceptance(diff, temp):
 
 # evtl bei 1/2 Fehler neuen Kandidaten berechnen durch Vertauschung von 2/3 Steinen?
 def simulated_annealing(init_sol, n_iter, temp, param=5.0, morphy=0,
-                        adapt_operations=0, write_data=1, print_iteration=0):
+                        adapt_operations=0, write_data=1, print_iteration=0, cool_f=None):
     """
     Simulated annealing Algorithmus
+    :param cool_f: Abkühlungsparameter
     :param adapt_operations: Anzahl Tauschs/Rotationen dynamisch anpassen mit aktueller Fehleranzahl
     :param init_sol: Startlösung
     :param n_iter: Anzahl der Schritte im Algorithmus
@@ -1008,7 +1211,7 @@ def simulated_annealing(init_sol, n_iter, temp, param=5.0, morphy=0,
     """
     if obj(init_sol) == 0:
         return [init_sol, obj(init_sol), [[0] * n_iter for _ in range(10)]]
-    temperatures = [get_temp(temp, k) for k in range(n_iter)]
+    temperatures = [get_temp(temp, k, cooling=cool_f) for k in range(n_iter)]
     data = []
     if write_data:
         data = [[0] * n_iter for _ in range(10)]
@@ -1037,8 +1240,9 @@ def simulated_annealing(init_sol, n_iter, temp, param=5.0, morphy=0,
         if diff < 0:
             p = 1
         else:
-            p = calc_acceptance(param * diff, t)  # multiplikativer Parameter Optimierung? Tradeoff wenige Schritte,
+            # p = calc_acceptance(param * diff, t)  # multiplikativer Parameter Optimierung? Tradeoff wenige Schritte,
             # aber seltenes Lösungsfinden
+            p = np.exp(- diff / (max_obj * t))  # schlechte Idee
         if np.random.rand() < p:
             # if diff > 0:
             #     print("WORSE SOLUTION ACCEPTED")
@@ -1057,20 +1261,25 @@ def simulated_annealing(init_sol, n_iter, temp, param=5.0, morphy=0,
     return [best_sol, best_val, data]
 
 
-def random_sol_mean(n_gens, all_tiles):
+def random_sol_mean(n_gens, n_tiles=7, all_tiles=None):
     """
     Zum Vergleich werden n_gens zufällige Lösungen generiert, und die beste Fehleranzahl ausgegeben
+    :param n_tiles: die Anzahl der aufsteigend verwendeten Steine
     :param n_gens: Anzahl der Generierungen einer zufälligen Lösung
     :param all_tiles: Codierung aller Spielsteine
     :return: Print
     """
+    if all_tiles is None:
+        all_tiles = tiles_complete
     evaluations_sum = 0
     best = 100
     for k in range(n_gens):
-        sol = gen_random_sol(all_tiles, n_tiles=7, kangaroo=0, sample=1, ascending=0, randomness=0, standard=1)
+        sol = gen_random_sol(all_tiles, n_tiles=n_tiles, kangaroo=0, sample=0, ascending=0, randomness=1, standard=0)
         sol_eval = obj(sol)
         if sol_eval < best:
             best = sol_eval
+        if sol_eval == 0:
+            print(f"Lösung: {sol}")
         evaluations_sum += sol_eval
     result = evaluations_sum / n_gens
     print(f"Durchschnittsfehleranzahl bei zufälliger Generierung von {n_gens} Lösungen: {result}")
@@ -1090,11 +1299,11 @@ def print_best_sols(data):
             print(f"Iteration: {k} \n candidate: {data[4][k]}")
 
 
-def find_param(sol, steps, temp, lim_low, lim_up, stepsize, n_runs, all_tiles):
+def find_param(sol, steps, temp, lim_low, lim_up, stepsize, n_runs, all_tiles=None):
     """
     Den Parameter, der bestimmt, wie schnell die Annahmewahrscheinlichkeit für schlechtere Lösungen sinkt
     versuchen zu optimieren
-    :param sol: Eine beliebige Lösung
+    :param sol: eine beliebige Lösung
     :param steps: Schritte Alg.
     :param temp: Temp. Alg.
     :param lim_low: untere Grenze des Parameters
@@ -1104,6 +1313,8 @@ def find_param(sol, steps, temp, lim_low, lim_up, stepsize, n_runs, all_tiles):
     :param all_tiles: Codierung aller Spielsteine
     :return: array mit Ergebnissen, kann geplottet werden
     """
+    if all_tiles is None:
+        all_tiles = tiles_complete
     params = np.arange(lim_low, lim_up, stepsize)
     results = [[0] * len(params) for _ in range(3)]
     for index, param in enumerate(params):
@@ -1111,7 +1322,8 @@ def find_param(sol, steps, temp, lim_low, lim_up, stepsize, n_runs, all_tiles):
         sum_steps = 0
         for k in range(n_runs):
             sol = gen_random_sol(all_tiles, n_tiles=7, kangaroo=0, sample=1, ascending=0, randomness=0, standard=1)
-            _, _, data = simulated_annealing(sol, steps, temp, param, 0, 0, 1, 0)
+            _, _, data = simulated_annealing(sol, steps, temp, param, morphy=0,
+                                             adapt_operations=0, write_data=0, print_iteration=1)
             if 0 in data[3]:
                 sol_found += 1
                 sum_steps += data[3].index(0)  # Anzahl der Schritte bis zum Finden der Lösung
@@ -1141,9 +1353,10 @@ def plot_param_over_steps(res):
     plt.show()
 
 
-def solve_flowers(puzzles, all_tiles, n_iter, temp, param=1.0, write_file=0, filename="solutions.txt"):
+def solve_flowers(puzzles, all_tiles, n_iter, temp, param=1.0, write_file=0, filename="solutions.txt", path=None):
     """
     Versucht alle Blumenpuzzles zu lösen (eine Lösung zu finden)
+    :param path: Pfad zum Abspeichern der Lösungen
     :param puzzles: alle 3432 möglichen Blumenpuzzles
     :param all_tiles: die Codierung aller 56 Steine
     :param n_iter: Schrittanzahl
@@ -1151,7 +1364,7 @@ def solve_flowers(puzzles, all_tiles, n_iter, temp, param=1.0, write_file=0, fil
     :param param: Ann. Wk. Alg.
     :param write_file: boolean Lösungen in .txt schreiben
     :param filename: Textdateiname
-    :return: array mit Lösungen
+    :return: array mit Lösungen [0] und Fehlerwert [1]
     """
     results = [[0] * len(puzzles) for _ in range(4)]
     for index, puzzle in enumerate(puzzles):
@@ -1159,7 +1372,7 @@ def solve_flowers(puzzles, all_tiles, n_iter, temp, param=1.0, write_file=0, fil
         opt_val = 1
         opt_sol = []
         datastream = []
-        starting_sol = gen_start_sol(list(puzzle), all_tiles, 1)
+        starting_sol = gen_start_sol(list(puzzle), 1, all_tiles)
         while opt_val > 0 and attempts < 10:
             opt_sol, opt_val, datastream = simulated_annealing(starting_sol, n_iter, temp, param,
                                                                morphy=0, write_data=1)
@@ -1174,6 +1387,8 @@ def solve_flowers(puzzles, all_tiles, n_iter, temp, param=1.0, write_file=0, fil
         print(index)
     results[0] = standardize_sols(results[0])
     if write_file:
+        if path is not None:
+            filename = os.path.join(path, filename)
         with open(filename, 'w') as file:
             # file.write("Lösungen für 3432 Puzzles\n\n")
             for k in range(len(results[0])):
@@ -1213,7 +1428,8 @@ def plot_flower_attempts(res):
     plt.show()
 
 
-def find_all_flower_sols(puzzle, attempts, all_tiles, n_iter, temp, param=1.0, write_file=0, filename=None):
+def find_all_flower_sols(puzzle, attempts, n_iter, temp, param=1.0,
+                         write_file=0, filename=None, all_tiles=None):
     """
     Findet so viele verschiedene Lösungen eines Blumenpuzzles wie möglich
     :param puzzle: Steinnummern, welche das Puzzle definieren, als array
@@ -1226,22 +1442,26 @@ def find_all_flower_sols(puzzle, attempts, all_tiles, n_iter, temp, param=1.0, w
     :param filename: Name der Textdatei
     :return: array mit den gefundenen Lösungen
     """
+    if all_tiles is None:
+        all_tiles = tiles_complete
     solutions = [[] for _ in range(2)]
     for k in range(attempts):
-        print(k)
-        starting_sol = gen_start_sol(list(puzzle), all_tiles, standard=1)
+        # print(f"Versuch {k}")
+        starting_sol = gen_start_sol(list(puzzle), standard=0, fields=None,  # standard=1, falls blumen gelöst werden
+                                     all_tiles=all_tiles)  # nur einmal generieren?
         opt_sol, opt_val, _ = simulated_annealing(starting_sol, n_iter, temp, param, morphy=0, write_data=0)
         if opt_val == 0:
             if len(solutions[0]) == 0:
                 solutions[0].append(std(opt_sol))
                 solutions[1].append(k + 1)
             else:
-                if opt_sol not in solutions[0]:
+                if std(opt_sol) not in solutions[0]:
                     solutions[0].append(std(opt_sol))
                     solutions[1].append(k + 1)
     # solutions[0] = standardize_sols(solutions[0])
-    print(len(solutions[0]))
-    print(solutions[1][-1])  # wann wurde die letzte Lösung gefunden
+    print(f"Gefundene Lösungen: {len(solutions[0])}")
+    if len(solutions[0]) > 0:
+        print(f"Letzter erfolgreicher Durchlauf: {solutions[1][-1]}")  # wann wurde die letzte Lösung gefunden
     if write_file:
         if filename is None:
             filename = '_'.join([str(sorted(puzzle)[k]) for k in range(len(puzzle))]) + \
@@ -1252,7 +1472,7 @@ def find_all_flower_sols(puzzle, attempts, all_tiles, n_iter, temp, param=1.0, w
                 line = str(solutions[0][k])
                 file.writelines(line)
                 file.writelines("\n")
-    return solutions
+    return solutions[0]
 
 
 def find_unsolvable_flower(attempts_to_solve, attempts_to_search, n_iter, temp, param):
@@ -1274,7 +1494,7 @@ def find_unsolvable_flower(attempts_to_solve, attempts_to_search, n_iter, temp, 
         sol_val = obj(sol)
         counter = 0
         while counter < attempts_to_solve and sol_val > 0:
-            sol, sol_val, _ = simulated_annealing(sol, n_iter, temp, param, 0, 0, 0)
+            sol, sol_val, _ = simulated_annealing(sol, n_iter, temp, param, morphy=0, adapt_operations=0, write_data=0)
             counter += 1
             if counter > max_attempts:
                 max_attempts = counter
@@ -1284,6 +1504,51 @@ def find_unsolvable_flower(attempts_to_solve, attempts_to_search, n_iter, temp, 
             print(sol)
             return
     print(f"Kein unlösbares Puzzles gefunden, meiste Versuche: {max_attempts} für: {max_sol}")
+
+
+def find_minimum_sols(attempts_to_search, attempts_to_solve, threshold, n_iter, temp, param, path=None):
+    """Blumen mit möglichst wenigen Lösungen finden, Rekord 5 bzw. 0, gibt es 1?"""
+
+    def gen_mixed_puzzle():
+        puzz = []
+        counter_ = 7
+        for i in range(4):
+            if counter_ == 0:
+                break
+            if i < 3:
+                random_counter = np.random.randint(1, 4)
+            else:
+                random_counter = counter_
+            puzz += random.sample([*range(i * 14, (i + 1) * 14)], k=min(counter_, random_counter))
+            counter_ -= min(counter_, random_counter)
+        return puzz
+
+    #
+    for k in range(attempts_to_search):
+        sols = []
+        print(f"Attempt #{k}")
+        puzzle = gen_mixed_puzzle()
+        sol = gen_start_sol(puzzle, standard=1)
+        sol_val = obj(sol)
+        attempts_counter = 0
+        while attempts_counter < attempts_to_solve:
+            sol, sol_val, _ = simulated_annealing(sol, n_iter, temp, param, morphy=0, adapt_operations=0, write_data=0)
+            if sol_val == 0 and std(sol) not in sols:
+                sols.append(std(sol))
+            if len(sols) > threshold:
+                break
+            attempts_counter += 1
+        if attempts_counter < attempts_to_solve:  # nur falls mit break aus der while Schleife gegangen wurde
+            continue
+        filename = f"{len(sols)}__{attempts_to_search}.txt"
+        if path is not None:
+            filename = os.path.join(path, filename)
+        with open(filename, 'w') as file:
+            if len(sols) == 0:
+                file.write(str(sol) + '\n')
+            for line in sols:
+                file.write(str(line) + '\n')
+        break
 
 
 def elim_ident(filename):
@@ -1319,15 +1584,22 @@ def elim_ident(filename):
             file.write(str(sol) + '\n')
 
 
-def std(solution, standard=1):
+# def std(solution, standard=1):
+#     """Lösung einheitlich formatieren, Orientierung des mittleren Steins ist 0"""
+#     if not standard:
+#         temp_sol = copy.deepcopy(solution[1:])
+#     else:
+#         temp_sol = copy.deepcopy(solution)
+#     out = rotate_sol(temp_sol, n_rotations=6 - solution[-1][0])
+#     if not standard:
+#         out.insert(0, [*range(len(out[0]))])
+#     return out
+
+
+def std(solution):  # sinnlos, Standartisierung ist für Lösungen mit Länge 4 nicht eindeutig
     """Lösung einheitlich formatieren, Orientierung des mittleren Steins ist 0"""
-    if not standard:
-        temp_sol = copy.deepcopy(solution[1:])
-    else:
-        temp_sol = copy.deepcopy(solution)
+    temp_sol = copy.deepcopy(solution)
     out = rotate_sol(temp_sol, n_rotations=6 - solution[-1][0])
-    if not standard:
-        out.insert(0, [*range(len(out[0]))])
     return out
 
 
@@ -1339,11 +1611,10 @@ def standardize_sols(solutions):
     return std_sols
 
 
-def find_sol_rand(runs, all_tiles, puzzle=None, conf=0.95):
+def find_sol_rand(runs, puzzle=None, conf=0.95):
     """
     Versucht, von einem Puzzle eine Lösung durch pures Ausprobieren aller Möglichkeiten zu finden
     :param runs: Anzahl der Versuche (ein Versuch läuft bis eine Lösung gefunden wurde)
-    :param all_tiles: Alle Spielsteine codiert
     :param puzzle: optional ein Puzzle welches gelöst werden soll
     :param conf: Konfidenz für die Angabe der Anzahl der Lösungen des Puzzles auf Grundlage der durchschnittlichen
                  Anzahl an benötigten Schritten bis zum Finden einer Lösung
@@ -1354,14 +1625,14 @@ def find_sol_rand(runs, all_tiles, puzzle=None, conf=0.95):
     if puzzle is None:
         curr = gen_random_sol(tiles_complete, n_tiles=7, kangaroo=1, sample=0, ascending=0, randomness=0, standard=1)
     else:
-        curr = gen_start_sol(puzzle, all_tiles, 1)
+        curr = gen_start_sol(puzzle, 1)
     for i in range(runs):
         run_steps = 0
         print(i)
         current_score = 1
         # curr = []
         while current_score > 0:
-            curr = gen_start_sol(curr[0], all_tiles, 1)
+            curr = gen_start_sol(curr[0], 1)
             current_score = obj(curr)
             run_steps += 1
         print(curr)
@@ -1378,13 +1649,15 @@ def find_sol_rand(runs, all_tiles, puzzle=None, conf=0.95):
     return avg, steps
 
 
-def random_pyramid(attempts, all_tiles):
+def random_pyramid(attempts, all_tiles=None):
     """
     Das unsolved Loop Puzzle durch zuföllige Generierungen versuchen zu lösen
     :param attempts: Versuche
     :param all_tiles: Steine
     :return: Plot
     """
+    if all_tiles is None:
+        all_tiles = tiles_complete
     data = [[] for _ in range(2)]
 
     def gen_sol():
@@ -1417,14 +1690,16 @@ def random_pyramid(attempts, all_tiles):
     return None
 
 
-def flower_one_tile(all_tiles):
+def flower_one_tile(all_tiles=None):
     """Blumen mit nur einem einzigen Stein finden"""
+    if all_tiles is None:
+        all_tiles = tiles_complete
     vals = []
     for k in range(len(all_tiles)):
         print(f"Blume: {k}")
-        sol = gen_start_sol([k for _ in range(7)], tiles_complete, 1)
+        sol = gen_start_sol([k for _ in range(7)], 1, all_tiles)
         sol, val, _ = simulated_annealing(sol, 25000, 500, 5, 0, 0, 0, 0)
-        sol = std(sol, standard=1)
+        sol = std(sol)
         draw_sol(sol)
         vals.append(val)
         print(val)
@@ -1436,6 +1711,7 @@ def flower_one_tile(all_tiles):
 
 def read_sols_from_file(filename, standard=0):
     """Liest .txt aus mit Lösungen in jeder Zeile und gibt diese als list aus"""
+
     def parse_line(line):
         """Parses a single line of the text file into a structured solution."""
         elements = line.strip()[1:-1].split("], [")
@@ -1464,13 +1740,13 @@ def find_best_sols(filename, top=None):
     Sucht aus einer Textdatei mit Lösungen die mit den längsten Linien/Schleifen heraus und gibt diese
     sortiert aus
     :param filename: Dateiname
-    :param top: Nur die top x Lösungen ausgeben
+    :param top: nur die top x Lösungen ausgeben
     :return: zip-Array mit (lsg, rating)
     """
 
     def rate_sol(line_loop_data):
         """Funktion zur Bewertung einer Lösung, Schleifen werden doppelt gewertet im Vergleich zu Linien"""
-        rating = sum([k[0] for k in line_loop_data]) + 2 * sum([k[1] for k in line_loop_data])  # Linien:Schleife 1:2
+        rating = sum([k[0] for k in line_loop_data]) + 2 * sum([k[1] for k in line_loop_data])  # Linien: Schleife 1:2
         return rating
 
     ratings = []
@@ -1486,6 +1762,31 @@ def find_best_sols(filename, top=None):
     for t in range(top):
         print(cand_rating_zip[t])
     # print(cand_rating_zip)
+
+
+def write_rating_csv(directory, csv_path=None):
+    """Alle Lösungen in einem Ordner bewerten und daraus csv-Dateien generieren"""
+    def rate_sol(line_loop_data):
+        """Funktion zur Bewertung einer Lösung, Schleifen werden doppelt gewertet im Vergleich zu Linien"""
+        rating = sum([k[0] for k in line_loop_data]) + 2 * sum([k[1] for k in line_loop_data])  # Linien: Schleife 1:2
+        return rating
+#
+    text_files = glob.glob(os.path.join(directory, '*.txt'))
+    for text_file in text_files:
+        raw_data = []
+        ratings = []
+        sols = read_sols_from_file(text_file, standard=0)
+        for index, cand in enumerate(sols):  # Lösungen bewerten und ordnen
+            raw_data.append(get_longest_connection(cand))
+            ratings.append(rate_sol(raw_data[-1]))
+        filename = f"{text_file.split('__')[0]}_{len(raw_data)}_{max(ratings)}.csv"
+        if csv_path is not None:
+            filename = os.path.join(csv_path, filename)
+        with open(filename, 'w', newline='') as file:
+            writer = csv.writer(file)
+            for k in range(len(ratings)):
+                writer.writerow([sols[k], raw_data[k], ratings[k]])
+    return None
 
 
 def try_puzzle(sol, steps, temp, param, attempts=-1):
@@ -1508,6 +1809,16 @@ def try_puzzle(sol, steps, temp, param, attempts=-1):
             print(f"Best val: {best_dolo}, sol: {best_solo}")
             return
     print(solo)
+
+
+def calc_all_sols_prob(n, k):
+    """Wahrscheinlichkeit, nach k (erfolgreichen) Durchläufen von
+     einem Puzzle mit n Lösungen alle einmal gefunden zu haben"""
+    total_sum = 0
+    for i in range(1, n + 1):
+        term = ((-1) ** (n - i)) * math.comb(n, i) * ((i / n) ** k)
+        total_sum += term
+    return total_sum
 
 
 def main():
@@ -1560,6 +1871,10 @@ def main():
                  [1, 1, 4, 3, 2, 1, 5, 3, 4, 4, 5, 0, 2, 0, 5, 5, 3, 5, 2, 3, 2, 1, 1,
                   0, 4, 2, 5, 1, 3, 4, 2, 5, 2, 0, 0, 3, 5, 0, 1, 5, 2, 0, 0, 3, 0, 5,
                   4, 3, 0, 4, 1, 4, 0, 5, 1, 4]]
+    dauli = [[0, 2, 3, 9, 10, 11, 22, 23, 24, 25, 41, 42, 43, 44, 45],
+             [5, 17, 1, 31, 41, 9, 39, 40, 35, 2, 19, 33, 37, 23, 16],
+             ['121332', '332442', '212313', '114334', '141433', '113223', '331441', '113344', '114433', '131322',
+              '243324', '141334', '113443', '223443', '224343'], [2, 2, 0, 4, 2, 5, 5, 1, 2, 3, 4, 5, 0, 3, 1]]
     # rot_sol = rotate_sol(solution)
     # draw_sol(solution)
     # draw_sol(rot_sol, tiles)
@@ -1581,7 +1896,7 @@ def main():
     # # plot_p_over_steps(datastream)
     # plot_val_over_steps(datastream)
     # plot_cand_curr_over_steps(datastream)
-    # random_sol_mean(steps, tiles)
+    # random_sol_mean(steps, 7, tiles)
 
     # Bestimmen des Annahme-Wk-Parameters durch Ausprobieren
     # test_datastream = find_param(start_sol, 25000, 500, 0.5, 8.0, 0.5, 100, tiles)
@@ -1597,11 +1912,11 @@ def main():
     # gen_flower_sol_file(flower_results)
 
     # Möglichst viele Lösungen einer Blume finden
-    # all_sols = find_all_flower_sols(rand_sol[0], 10000, tiles_complete, steps, temperature, 6, write_file=1)
-    # all_sols = find_all_flower_sols(all_puzzles[0], 10000, tiles_complete, steps, temperature, 6, write_file=1)
+    # all_sols = find_all_flower_sols(rand_sol[0], 10000, steps, temperature, 6, write_file=1)
+    # all_sols = find_all_flower_sols(all_puzzles[0], 10000, steps, temperature, 6, write_file=1)
 
     # Simulated annealing von allgemeinen Puzzles mit unterschiedlicher Tile-Anzahl und Formen
-    # big_sol = random_sol_gen(tiles_complete, n_tiles=7, kangaroo=0, sample=0, ascending=0, randomness=1)
+    # big_sol = gen_random_sol(tiles_complete, n_tiles=7, kangaroo=0, sample=0, ascending=0, randomness=1)
     # opt_sol, opt_val, datastream = simulated_annealing(rsx_unsol, steps, temperature, 5)
     # draw_sol(opt_sol)
     # print(f"Fehleranzahl der besten Lösung: {opt_val}")
@@ -1613,9 +1928,12 @@ def main():
     # plot_cand_curr_over_steps(datastream)
 
     # Versuch, unlösbare Puzzles zu finden (Blumen)
-    # find_unsolvable(attempts_to_solve=10, attempts_to_search=100, n_iter=20000, temp=500, param=5)
+    # find_unsolvable_flower(attempts_to_solve=10, attempts_to_search=100, n_iter=20000, temp=500, param=5)
 
-    # solo, dolo, data = simulated_annealing(rand_sol, 10000, 500, 5, 0, 0, write_data=1, print_iteration=1)
+    # solo, dolo, data = simulated_annealing(init_sol=[[0, 1, 2, 3, 4, 5, 6], [7, 8, 10, 9, 3, 11, 1],
+    #                                                  ['112233', '121323', '131232', '113223', '112332', '221331',
+    #                                                   '212313'], [1, 3, 1, 4, 5, 3, 0]], n_iter=25000, temp=1, param=5,
+    #                                        morphy=0, adapt_operations=0, write_data=1, print_iteration=1, cool_f=0.9997)
     # draw_sol(solo)
     # print(solo)
     # plot_cand_curr_over_steps(data)
@@ -1628,6 +1946,14 @@ def main():
     # flower_one_tile(tiles_complete)
 
     # try_puzzle(start_sol, 20000, 500, 1, 50)
+
+    # find_all_flower_sols([0, 2, 4, 6, 8], 500, 20000, 500, 5, 1)
+
+    # pairings = generate_pairings(14)
+    # spp = calc_sols_per_pairing(pairings=pairings, puzzle_list=all_puzzles)
+    # print(spp[:10])
+
+    find_minimum_sols(1, 50, 40, 20000, 500, 6)
 
 
 if __name__ == "__main__":
