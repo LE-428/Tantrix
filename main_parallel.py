@@ -763,7 +763,7 @@ def get_temp(temp, step, cooling=None):
     :return: Ausgangstemperatur
     """
     if cooling is None:
-        t = temp / (0.2 * float(step + 1))
+        t = temp / (1 * float(step + 1))  # (0.2 * float(step + 1))
     else:
         t = cooling ** step * temp
     return t
@@ -784,7 +784,7 @@ def calc_acceptance(diff, temp):
 
 
 # evtl bei 1/2 Fehler neuen Kandidaten berechnen durch Vertauschung von 2/3 Steinen?
-def simulated_annealing(init_sol, n_iter, temp, param=5.0, write_data=1):
+def simulated_annealing(init_sol, n_iter, temp, param=1, write_data=1):
     """
     Simulated annealing Algorithmus
     :param init_sol: Startlösung
@@ -957,14 +957,13 @@ def print_best_sols(data):
             print(f"Iteration: {k} \n candidate: {data[4][k]}")
 
 
-def find_param(sol, steps, temp, lim_low, lim_up, stepsize, n_runs, all_tiles=None):
+def find_temp(steps, lim_low, lim_up, stepsize, n_runs, sol=None, all_tiles=None):
     """
     Den Parameter, der bestimmt, wie schnell die Annahmewahrscheinlichkeit für schlechtere Lösungen sinkt
     versuchen zu optimieren
     :param sol: eine beliebige Lösung
     :param steps: Schritte Alg.
-    :param temp: Temp. Alg.
-    :param lim_low: untere Grenze des Parameters
+    :param lim_low: untere Grenze der Starttemperatur
     :param lim_up: obere Grenze
     :param stepsize: Schrittweite des Parameters
     :param n_runs: Anzahl Durchläufe pro Parameter-Kandidat
@@ -973,36 +972,38 @@ def find_param(sol, steps, temp, lim_low, lim_up, stepsize, n_runs, all_tiles=No
     """
     if all_tiles is None:
         all_tiles = tiles_complete
-    params = np.arange(lim_low, lim_up, stepsize)
-    results = [[0] * len(params) for _ in range(3)]
-    for index, param in enumerate(params):
+    temperatures = np.arange(lim_low, lim_up, stepsize)
+    results = [[0] * len(temperatures) for _ in range(3)]
+    for index, temp in enumerate(temperatures):
         sol_found = 0
         sum_steps = 0
         for k in range(n_runs):
-            sol = gen_random_sol(all_tiles, n_tiles=7, kangaroo=0, sample=1, ascending=0, randomness=0, standard=1)
-            _, _, data = simulated_annealing(sol, steps, temp, param)
+            if sol is None:
+                sol = gen_random_sol(all_tiles, n_tiles=7, kangaroo=0, sample=0, ascending=0, randomness=1, standard=1)
+            _, _, data = simulated_annealing(sol, steps, temp, param=1, morphy=0,
+                                             adapt_operations=0, write_data=1, print_iteration=0)
             if 0 in data[3]:
                 sol_found += 1
                 sum_steps += data[3].index(0)  # Anzahl der Schritte bis zum Finden der Lösung
-        results[0][index] = param
+        results[0][index] = temp  # param ändert nur Temperatur durch Skalar
         results[1][index] = sol_found / n_runs
         results[2][index] = sum_steps / int(sol_found) if sol_found != 0 else 0  # n_runs
     return results
 
 
-def plot_param_over_rate(res):
+def plot_temp_over_rate(res):
     plt.plot(res[0], res[1])
-    plt.xlabel('Parameter value')
+    plt.xlabel('Starting temperature')
     plt.ylabel('% of successful runs')
-    plt.ylim(0, 1)
+    plt.ylim(0, 1.1)
     # plt.legend()
     plt.title(datetime.datetime.now().time())
     plt.show()
 
 
-def plot_param_over_steps(res):
+def plot_temp_over_n_steps(res):
     plt.plot(res[0], res[2])
-    plt.xlabel('Parameter value')
+    plt.xlabel('Starting temperature')
     plt.ylabel('# of steps to solution if successful')
     plt.ylim(0, max(res[2]))
     # plt.legend()
@@ -1010,7 +1011,7 @@ def plot_param_over_steps(res):
     plt.show()
 
 
-def solve_flowers(puzzles, all_tiles, n_iter, temp, param=1.0, write_file=0, filename="solutions.txt"):
+def solve_flowers(puzzles, all_tiles, n_iter, temp, param=1, write_file=0, filename="solutions.txt"):
     """
     Versucht alle Blumenpuzzles zu lösen (eine Lösung zu finden)
     :param puzzles: alle 3432 möglichen Blumenpuzzles
@@ -1081,7 +1082,7 @@ def plot_flower_attempts(res):
     plt.show()
 
 
-def find_all_flower_sols(puzzle, attempts, all_tiles, n_iter, temp, param=1.0, write_file=0, filename=None):
+def find_all_flower_sols(puzzle, attempts, all_tiles, n_iter, temp, param=1, write_file=0, filename=None):
     """
     Findet so viele verschiedene Lösungen eines Blumenpuzzles wie möglich
     :param puzzle: Steinnummern, welche das Puzzle definieren, als array
@@ -1098,7 +1099,7 @@ def find_all_flower_sols(puzzle, attempts, all_tiles, n_iter, temp, param=1.0, w
     for k in range(attempts):
         # print(f"Versuch {k}")
         starting_sol = gen_start_sol(list(puzzle), standard=1, fields=None,
-                                     all_tiles=all_tiles)  # nur einmal generieren?
+                                     all_tiles=all_tiles)  # nur einmal generieren? standard=0, falls keine Blume
         opt_sol, opt_val, datastream = simulated_annealing(starting_sol, n_iter, temp, param, write_data=1)
         if opt_val == 0:
             if len(solutions[0]) == 0:
@@ -1125,7 +1126,7 @@ def find_all_flower_sols(puzzle, attempts, all_tiles, n_iter, temp, param=1.0, w
     return solutions[0]
 
 
-def find_unsolvable_flower(attempts_to_solve, attempts_to_search, n_iter, temp, param):
+def find_unsolvable_flower(attempts_to_solve, attempts_to_search, n_iter, temp, param=1):
     """
     Versucht, ein Blumenpuzzle zu finden, welches auch nach 10 Anläufen nicht gelöst werden kann, Verdacht
     auf Unlösbarkeit?
@@ -1346,7 +1347,7 @@ def gen_mixed_puzzle():
     return puzz
 
 
-def find_minimum_sols(attempts_to_search, attempts_to_solve, threshold, n_iter, temp, param, path=None):
+def find_minimum_sols(attempts_to_search, attempts_to_solve, threshold, n_iter, temp, param=1, path=None):
     """Blumen mit möglichst wenigen Lösungen finden, Rekord 5 bzw. 0, gibt es 1?"""
     for k in range(attempts_to_search):
         sols = []
@@ -1446,7 +1447,7 @@ def main():
     steps = 25000
 
     # Simulated annealing mit Blumenpuzzle
-    # opt_sol, opt_val, datastream = simulated_annealing(start_sol, steps, temperature, 5)
+    # opt_sol, opt_val, datastream = simulated_annealing(start_sol, steps, temperature, 1)
     # draw_sol(opt_sol)
     # print(f"Fehleranzahl der besten Lösung: {opt_val}")
     # print(opt_sol)
@@ -1458,9 +1459,9 @@ def main():
     # random_sol_mean(steps, 7, tiles)
 
     # Bestimmen des Annahme-Wk-Parameters durch Ausprobieren
-    # test_datastream = find_param(start_sol, 25000, 500, 0.5, 8.0, 0.5, 100, tiles)
-    # plot_param_over_steps(test_datastream)
-    # plot_param_over_rate(test_datastream)
+    # test_datastream = find_temp(steps=25000, lim_low=300, lim_up=700, stepsize=50, n_runs=50)
+    # plot_temp_over_n_steps(test_datastream)
+    # plot_temp_over_rate(test_datastream)
 
     # Löst alle 14C7 Blumenpuzzles, 10 Versuche pro Puzzle
     # flower_results = solve_flowers(all_puzzles, tiles, steps, temperature, 6, write_file=1)
@@ -1476,7 +1477,7 @@ def main():
 
     # Simulated annealing von allgemeinen Puzzles mit unterschiedlicher Tile-Anzahl und Formen
     # big_sol = gen_random_sol(tiles_complete, n_tiles=7, kangaroo=0, sample=0, ascending=0, randomness=1)
-    # opt_sol, opt_val, datastream = simulated_annealing(rsx_unsol, steps, temperature, 5)
+    # opt_sol, opt_val, datastream = simulated_annealing(rsx_unsol, steps, temperature, 1)
     # draw_sol(opt_sol)
     # print(f"Fehleranzahl der besten Lösung: {opt_val}")
     # print(opt_sol)
@@ -1497,7 +1498,7 @@ def main():
     # run_flowers_parallel(flower_list=kangaroo_puzzles, attempts_per_call=1, calls_per_process=1, n_iter=25000, temp=500, param=6.0, write=1,
     #                      filename=None, path=None, write_doc=1)
     find_minimum_sols_parallel(attempts_to_search=10, attempts_to_solve=100, threshold=80, n_iter=20000, temp=500,
-                               param=6, path='G:\\Tantrix\\Loesungen\\Minimum\\')
+                               param=1, path='G:\\Tantrix\\Loesungen\\Minimum\\')
 
 
 if __name__ == "__main__":
