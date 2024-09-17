@@ -4,6 +4,7 @@ from itertools import combinations
 from itertools import groupby
 from collections import Counter
 import copy
+import ast
 
 import datetime
 
@@ -908,7 +909,7 @@ def sa3(init_sol, n_iter=10000, temp=10, restart_threshold=3000, max_restarts=0,
                 print("leaving loop")
                 break
             if cand_val == 0:
-            # if cand_val in (0, 1, 2):
+                # if cand_val in (0, 1, 2):
                 if focus_mode == 1:
                     curr_val = objective
                     if focus_errors:
@@ -1151,6 +1152,17 @@ def print_best_sols(data):
             print(f"Iteration: {k} \t objective: {data[3][k]} \n candidate: {data[4][k]}")
 
 
+def parse_sol(input):
+    output = None
+    if isinstance(input, str):
+        try:
+            output = ast.literal_eval(input)
+        except (ValueError, SyntaxError):
+            print("Ungültiges Format für das Puzzle-Argument, verwende default Puzzle")
+            output = None
+    return output
+
+
 def main():
     # Startlösung, die wir weiterverwenden möchten
     start_sol = gen_random_sol(kangaroo=0, sample=1, standard=1)
@@ -1159,27 +1171,38 @@ def main():
     parser = argparse.ArgumentParser(description="Eingabe der Parameter für den Algorithmus")
 
     # Füge die optionalen Argumente hinzu, die für sa3 verwendet werden
-    parser.add_argument('--puzzle', type=list, default=start_sol, help="Puzzle, welches gelöst werden soll")
-    parser.add_argument('--n_iter', type=int, default=10000, help="Anzahl der Iterationen")
-    parser.add_argument('--temp', type=float, default=10, help="Starttemperatur")
-    parser.add_argument('--restart_threshold', type=int, default=3000, help="Iterationen-Schwellenwert für Neustart")
-    parser.add_argument('--max_restarts', type=int, default=0, help="Maximale Anzahl an Neustarts")
+    parser.add_argument('--puzzle', type=str, default=start_sol,
+                        help="Puzzle, welches gelöst werden soll, Formatierung (string): \"[[Stein-Nummern]]\" "
+                             "oder \"[[Felder], [Stein-Nummern]]\", siehe README")
+    parser.add_argument('--n_iter', type=int, default=10000, help="Anzahl der Iterationen des Algorithmus, " 
+                                                                  "default: 10000")
+    parser.add_argument('--temp', type=float, default=10, help="Starttemperatur, default: 10")
+    parser.add_argument('--restart_threshold', type=int, default=3000, help="erfolglose Iterationen-Schwellenwert "
+                                                                            "für Neustart des Algorithmus, "
+                                                                            "default: 3000")
+    parser.add_argument('--max_restarts', type=int, default=0, help="Maximale Anzahl an Neustarts, default: 0")
     parser.add_argument('--focus_errors', type=int, default=1,
-                        help="Fokussiere Fehler bei der Generierung von Kandidaten")
+                        help="Fokussiere Fehler bei der Generierung von Kandidaten, default: 1 (True)")
     parser.add_argument('--focus_color', type=int, default=None,
-                        help="Farbe mit Fokus auf zusammenhängende Linie (1: blau, 2: gelb, 3: rot, 4: grün)")
-    parser.add_argument('--morphy', type=int, default=0, help="Form der Lösung verändern?")
+                        help="Farbe mit Fokus auf zusammenhängende Linie (1: blau, 2: gelb, 3: rot, 4: grün), "
+                             "default: None")
+    parser.add_argument('--morphy', type=int, default=0, help="Form der Lösung verändern? default: 0 (False)")
     parser.add_argument('--adapt_operations', type=int, default=1,
-                        help="Anzahl der Tauschs/Rotationen dynamisch anpassen")
-    parser.add_argument('--write_data', type=int, default=1, help="Sollen Daten geschrieben werden?")
-    parser.add_argument('--print_iteration', type=int, default=0, help="Sollen Iterationen gedruckt werden?")
-    parser.add_argument('--cool_f', type=float, default=0.9985, help="Abkühlungsparameter")
+                        help="Anzahl der Tauschs/Rotationen dynamisch anpassen, default: 1 (True)")
+    parser.add_argument('--write_data', type=int, default=0, help="Sollen ausführliche Daten gespeichert und "
+                                                                  "geplottet werden?, default: 0 (False)")
+    parser.add_argument('--print_iteration', type=int, default=0, help="Sollen Iterationen in Kommandozeile "
+                                                                       "geprintet werden?, default: 0 (False)")
+    parser.add_argument('--cool_f', type=float, default=0.9985, help="Abkühlungsparameter, default: 0.9985")
 
     # Argumente parsen
     args = parser.parse_args()
 
+    if parse_sol(args.puzzle) is not None:
+        start_sol = parse_sol(args.puzzle)
+
     # sa3 Funktion aufrufen und die geparsten Argumente verwenden
-    solo, dolo, data = sa3(init_sol=args.puzzle,
+    solo, dolo, data = sa3(init_sol=start_sol,
                            n_iter=args.n_iter,
                            temp=args.temp,
                            restart_threshold=args.restart_threshold,
@@ -1194,9 +1217,10 @@ def main():
 
     draw_sol(solo)
     print_best_sols(data)
-    # plot_cand_curr_over_steps(data)
-    # plot_val_over_steps(data)
-    # plot_p_over_steps(data, 0)
+    if args.write_data:
+        plot_cand_curr_over_steps(data)
+        plot_val_over_steps(data)
+        plot_p_over_steps(data, 0)
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ This project involves solving Tantrix puzzles using a simulated annealing algori
 
 ## Files
 
-- **start.py**: Quick-start file can be executed directly from the command window with **python start.py**, add **-h** for help
+- **start.py**: Quick-start file that can be executed directly from the command window with **python start.py**, add **-h** for help
 - **main.py**: Contains the primary functions and implementations for solving the Tantrix puzzle using simulated annealing.
 - **main_parallel.py**: Implements parallel processing to enhance the performance of the puzzle-solving algorithm, leveraging multiple CPU cores.
 - **landscape.py**: Analyzes the fitness landscape of the Tantrix flower puzzle
@@ -18,6 +18,14 @@ This project involves solving Tantrix puzzles using a simulated annealing algori
 - **3432.txt**: Number of solutions to the 3432 flower puzzles with 3 colors
 - **sols_135135_pairings.csv**: Number of solutions combined to the 128 puzzles emerging from every pairing of the first 14 Tantrix tiles (see *calc_sols_per_pairing* in **main.py**)
 - **equivalence_classes.csv**: (see *write_class_data* in **main.py**)
+- **0-3432**: Folders with all solutions to the 3432 Puzzles, use *draw_sol* in **main.py** to draw
 ## Simulated Annealing Algorithm
 
 Simulated annealing is a probabilistic technique for approximating the global optimum of a given function. In the context of the Tantrix puzzle, the algorithm attempts to minimize the number of mismatched edges between adjacent tiles.
+
+## Tantrix tiles
+
+![Tantrix tiles enumeration](images/tiles.png)
+
+
+![Board fields enumeration](images/field_enumeration.png)

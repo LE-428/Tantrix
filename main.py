@@ -12,6 +12,7 @@ import copy
 import datetime
 import os
 import glob
+import ast
 
 import math
 import matplotlib.pyplot as plt
@@ -2328,15 +2329,27 @@ def find_minimum_sols(attempts_to_search, attempts_to_solve, threshold, n_iter, 
         break
 
 
-def parse_line(line):
+# def parse_line(line):
+#     """Parst eine einzelne Zeile der Textdatei (string) in eine strukturierte Lösung."""
+#     elements = line.strip()[1:-1].split("], [")
+#     parsed_elements = [
+#         list(map(int, elements[0][1:].split(", "))),
+#         elements[1][1:-1].split("', '"),
+#         list(map(int, elements[2][0:-1].split(", ")))
+#     ]
+#     return parsed_elements
+
+
+def parse_sol(input):
     """Parst eine einzelne Zeile der Textdatei (string) in eine strukturierte Lösung."""
-    elements = line.strip()[1:-1].split("], [")
-    parsed_elements = [
-        list(map(int, elements[0][1:].split(", "))),
-        elements[1][1:-1].split("', '"),
-        list(map(int, elements[2][0:-1].split(", ")))
-    ]
-    return parsed_elements
+    output = None
+    if isinstance(input, str):
+        try:
+            output = ast.literal_eval(input)
+        except (ValueError, SyntaxError):
+            print("Ungültiges Format für das Puzzle-Argument.")
+            output = None
+    return output
 
 
 def elim_ident(filename):

@@ -1,5 +1,4 @@
-.idea/inspectionProfiles/Project_Default.xml
-.idea/inspectionProfiles/profiles_settings.xml
+.idea/
 venv/
 variables.dill
 __pycache__/
