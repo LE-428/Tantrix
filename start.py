@@ -978,7 +978,8 @@ def sa3(init_sol, n_iter=10000, temp=10, restart_threshold=3000, max_restarts=0,
             # print("new temp")
             t = temperatures[temp_index]
             try:
-                exp_val = np.exp((max_obj - best_val) / t)
+                exp_val = np.exp((max_obj - best_val) / max(t, 1.0))
+                # print(f"{best_val=}__{t=}__{exp_val=}")
                 exp_val = min(exp_val, 1e10)  # Setze eine Obergrenze (z.B. 1e10)
                 steps_at_temp = min(max(int(exp_val), 1), 30)
             except OverflowError:
@@ -1152,11 +1153,11 @@ def print_best_sols(data):
             print(f"Iteration: {k} \t objective: {data[3][k]} \n candidate: {data[4][k]}")
 
 
-def parse_sol(input):
+def parse_sol(solution):
     output = None
-    if isinstance(input, str):
+    if isinstance(solution, str):
         try:
-            output = ast.literal_eval(input)
+            output = ast.literal_eval(solution)
         except (ValueError, SyntaxError):
             print("Ungültiges Format für das Puzzle-Argument, verwende default Puzzle")
             output = None
@@ -1177,6 +1178,7 @@ def main():
     parser.add_argument('--n_iter', type=int, default=10000, help="Anzahl der Iterationen des Algorithmus, " 
                                                                   "default: 10000")
     parser.add_argument('--temp', type=float, default=10, help="Starttemperatur, default: 10")
+    parser.add_argument('--cool_f', type=float, default=0.9985, help="Abkühlungsparameter, default: 0.9985")
     parser.add_argument('--restart_threshold', type=int, default=3000, help="erfolglose Iterationen-Schwellenwert "
                                                                             "für Neustart des Algorithmus, "
                                                                             "default: 3000")
@@ -1193,7 +1195,6 @@ def main():
                                                                   "geplottet werden?, default: 0 (False)")
     parser.add_argument('--print_iteration', type=int, default=0, help="Sollen Iterationen in Kommandozeile "
                                                                        "geprintet werden?, default: 0 (False)")
-    parser.add_argument('--cool_f', type=float, default=0.9985, help="Abkühlungsparameter, default: 0.9985")
 
     # Argumente parsen
     args = parser.parse_args()
@@ -1205,6 +1206,7 @@ def main():
     solo, dolo, data = sa3(init_sol=start_sol,
                            n_iter=args.n_iter,
                            temp=args.temp,
+                           cool_f=args.cool_f,
                            restart_threshold=args.restart_threshold,
                            max_restarts=args.max_restarts,
                            focus_errors=args.focus_errors,
@@ -1212,12 +1214,11 @@ def main():
                            morphy=args.morphy,
                            adapt_operations=args.adapt_operations,
                            write_data=args.write_data,
-                           print_iteration=args.print_iteration,
-                           cool_f=args.cool_f)
+                           print_iteration=args.print_iteration)
 
     draw_sol(solo)
-    print_best_sols(data)
     if args.write_data:
+        print_best_sols(data)
         plot_cand_curr_over_steps(data)
         plot_val_over_steps(data)
         plot_p_over_steps(data, 0)

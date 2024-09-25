@@ -119,9 +119,10 @@ nsols = (495, 438, 460, 481, 419, 447, 477, 456, 466, 442, 418, 490, 519, 478, 4
          455, 397, 434, 504, 574, 380, 278, 508, 382, 296, 286, 222, 302, 212, 614, 342, 634, 332, 548, 414, 764, 496,
          560, 326, 522, 338, 402, 592, 392, 486, 352, 398, 430, 344, 194, 180, 162, 388, 450, 580, 720, 386, 566)
 
-tile_type_combo_avg = (344, 304, 262, 460, 401, 361, 302, 474, 450, 424, 376, 487, 485, 495, 512, 502, 442, 406, 357, 478, 458, 437,
-                       396, 481, 474, 472, 458, 475, 487, 505, 566, 516, 479, 467, 442, 488, 477, 483, 493, 473, 477, 495, 574, 446,
-                       457, 466)  # Schätzung für die Anzahl der Lösungen der Puzzles der 46 Kategorien
+# Schätzung für die Anzahl der Lösungen der Puzzles der 46 Kategorien
+tile_type_combo_avg = (344, 304, 262, 460, 401, 361, 302, 474, 450, 424, 376, 487, 485, 495, 512, 502, 442, 406, 357,
+                       478, 458, 437, 396, 481, 474, 472, 458, 475, 487, 505, 566, 516, 479, 467, 442, 488, 477, 483,
+                       493, 473, 477, 495, 574, 446, 457, 466)
 
 
 def generate_pairings(n):
@@ -151,33 +152,6 @@ def generate_tiles(tile_set):
     :return: array mit allen 56 Steinen richtig codiert
     """
     tiles_compl = [[list(tile_set[z]) for z in range(14)] for _ in range(4)]
-
-    # def shift_tile(tile, offset: int):
-    #     """
-    #     :param tile: eine Liste mit den Farben des Spielsteins
-    #     :param offset: um wie viele Stellen wird die Codierung von rechts nach links verschoben
-    #     :return: das verschobene Tile
-    #     """
-    #     return [tile[(i + offset) % 6] for i in range(6)]
-    #
-    # def sort_sol(tile):
-    #     """
-    #     Stein-codierung richtig verschieben
-    #     :param tile: Codierung eines Steins
-    #     :return: korrekte Codierung
-    #     """
-    #     for j in range(1, 4):
-    #         distance, index = get_dist(tile, j)
-    #         # if 0 < distance < 3:
-    #         #     tile = shift_tile(tile, index)
-    #         #     break
-    #         if distance in [1, 2, 4, 5]:
-    #             if distance < 4:
-    #                 tile = shift_tile(tile, index)
-    #             else:
-    #                 tile = shift_tile(tile, -index)
-    #             break
-    #     return tile
 
     def create_tiles(t_set, all_tiles):
         """
@@ -228,21 +202,10 @@ def read_sols_per_pairing(csv_filename=None):
 def read_sols_from_file(filename, standard=0):
     """Liest .txt aus mit Lösungen in jeder Zeile und gibt diese als list aus"""
 
-    # def parse_line(line):
-    #     """Parses a single line of the text file into a structured solution."""
-    #     elements = line.strip()[1:-1].split("], [")
-    #     parsed_elements = [
-    #         list(map(int, elements[0][1:].split(", "))),
-    #         elements[1][1:-1].split("', '"),
-    #         list(map(int, elements[2][0:-1].split(", ")))
-    #     ]
-    #     return parsed_elements
-
-    #
     with open(filename, 'r') as file:
         lines = file.readlines()
     #
-    sols = [parse_line(line) for line in lines]
+    sols = [parse_sol(line) for line in lines]
     sols = standardize_sols(sols)
     if not standard:
         if len(sols[0]) == 3:  # Eintrag für die Felder einfügen
@@ -455,26 +418,6 @@ def shift_tile(tile, offset: int):
     return [tile[(i + offset) % 6] for i in range(6)]
 
 
-# def sort_sol(tile):
-#     """
-#     Stein-codierung richtig verschieben
-#     :param tile: Codierung eines Steins
-#     :return: korrekte Codierung
-#     """
-#     for j in range(1, 4):
-#         distance, index = get_dist(tile, j)
-#         # if 0 < distance < 3:
-#         #     tile = shift_tile(tile, index)
-#         #     break
-#         if distance in [1, 2, 4, 5]:
-#             if distance < 4:
-#                 tile = shift_tile(tile, index)
-#             else:
-#                 tile = shift_tile(tile, -index)
-#             break
-#     return tile
-
-
 def sort_sol(tile):  # TESTEN!!!
     """
     Stein-codierung richtig verschieben
@@ -495,34 +438,6 @@ def sort_sol(tile):  # TESTEN!!!
     return tile
 
 
-# def rotate_sol(sol, n_rotations=1):  # bei allg. Lsg.: Ringe um den Ursprung verwenden
-#     """
-#     Eine eingegebene Lösung wird um eine Position im UZS rotiert
-#     :param n_rotations: Anzahl der Rotationen, im UZS, falls > 0, gegen UZS, falls < 0, default 1
-#     :param sol: Lösung
-#     :return: rotierte Lösung
-#     """
-#
-#     def shift_tiles(outer_tiles, offset: int):
-#         """
-#         :param outer_tiles: eine Liste mit den Nummern der Spielsteine
-#         :param offset: um wie viele Stellen werden die Steine von rechts nach links (vlnr für offset < 0) verschoben
-#         :return: die verschobenen Steine
-#         """
-#         return [outer_tiles[(i + offset) % 6] for i in range(6)]
-#
-#     tile_list = [*range(1, 7)]
-#     sol_rot = copy.deepcopy(sol)
-#     perm = shift_tiles(tile_list, n_rotations)
-#     for j in range(1, 7):  # äußere Steine werden n_rotations Positionen in der Systematik weitergeschoben
-#         sol_rot[0][j] = sol[0][perm[j - 1]]  # [(j + 4) % 6 + 1] gegen UZS
-#         sol_rot[1][j] = sol[1][perm[j - 1]]  # [(j % 6) + 1] im UZS
-#         sol_rot[2][j] = sol[2][perm[j - 1]]  # es muss noch rotiert werden
-#     for t in range(7):  # alle (auch mittleren) Steine um n_rotations Positionen im/gegen UZS rotieren
-#         sol_rot[2][t] = (sol_rot[2][t] + n_rotations) % 6
-#     return sol_rot
-
-
 def rotate_sol(sol, n_rotations=1):  # bei allg. Lsg.: Ringe um den Ursprung verwenden
     """
     Eine eingegebene Lösung wird um eine Position im UZS rotiert
@@ -531,14 +446,6 @@ def rotate_sol(sol, n_rotations=1):  # bei allg. Lsg.: Ringe um den Ursprung ver
     :return: rotierte Lösung
     """
 
-    # def shift_tiles(outer_tiles, offset: int):
-    #     """
-    #     :param outer_tiles: eine Liste mit den Nummern der Spielsteine
-    #     :param offset: um wie viele Stellen werden die Steine von rechts nach links (vlnr für offset < 0) verschoben
-    #     :return: die verschobenen Steine
-    #     """
-    #     return [outer_tiles[(i + offset) % 6] for i in range(6)]
-    #
     def update_field(field, ort=1):
         """Den Feldindex eines Steins aktualisieren, bool ort True, falls im UZS"""
         num = 1
@@ -740,6 +647,17 @@ def getCoordinates(pos):
     return hex_matrix @ coords
 
 
+def getColor(tile, edge, orientation):
+    """
+    Die Farbe einer Kante eines Steins ausgeben als int mit definierter Codierung
+    :param tile: Codierung des Steins
+    :param edge: Kante des Steins
+    :param orientation: Rotation des Steins
+    :return: Farbcode
+    """
+    return int(tile[(edge + orientation) % 6])
+
+
 def get_longest_connection(sol, focol=None, fields=False):
     """
     Findet die längsten Linien/Schleifen der Farben
@@ -831,27 +749,34 @@ def draw_sol(solution):
     """
     Die allgemeine Lösung plotten, jedes Tile in der Lösung wird betrachtet und einzeln
     geplottet nach der Orientierung und den Farbcodes
-    :param solution: Lösung, welche geplottet werden soll
+    :param solution: Lösung, welche geplottet werden soll, Format:
+                     [[fields], [tiles], [rotations]],
+                     [[tiles], [tile_codes], [rotations]],
+                     [[fields], [tiles], [tile_codes], [rotations]]
     :return: Matplotlib-Plot
     """
-    if len(solution) == 3:
-        solution.insert(0, [*range(len(solution[0]))])
-    plot_size = np.round(np.log2(len(solution[0])) + 3)  # Die Anzahl der hinzukommmenden Steine pro Umlauf ist
+    sol = solution[:]  # Eingabe-Lösung kopieren
+    if len(sol) == 3:
+        if type(sol[1][0]) == str:  # [[tiles], [tile_codes], [rotations]]
+            sol.insert(0, [*range(len(sol[0]))])
+        else:  # [[fields], [tiles], [rotations]]
+            sol.insert(2, [tiles_complete[index] for index in sol[1]])
+    plot_size = np.round(np.log2(len(sol[0])) + 3)  # Die Anzahl der hinzukommenden Steine pro Umlauf ist
     # ca. die Anzahl aller vorherigen Steine
     fig, ax = plt.subplots(figsize=(8 / 6 * plot_size, plot_size))
     # Größe und Position der Steine festlegen
     tile_size = 0.55
     # Für jeden Stein in der Lösung
-    for index, tile in enumerate(solution[2]):
-        tile_pos = solution[0][index]
-        tile_orientation = solution[3][index]
+    for index, tile in enumerate(sol[2]):
+        tile_pos = sol[0][index]
+        tile_orientation = sol[3][index]
         # Zeichne die Kanten des Steins
         draw_hexagon(ax, tile_pos, tile_orientation, tile, tile_size)
     ax.axis('equal')
     ax.axis('off')
-    # plt.title(f"{datetime.datetime.now().time()}, {obj(solution)} Fehler")
-    plt.title(f"{datetime.datetime.now():%H:%M:%S}, {obj(solution)} Fehler, {tuple(sorted(solution[1]))}, "
-              f"{categorize_puzzle(tuple(sorted(solution[1])))}")
+    # plt.title(f"{datetime.datetime.now().time()}, {obj(sol)} Fehler")
+    plt.title(f"{datetime.datetime.now():%H:%M:%S}, {obj(sol)} Fehler, {tuple(sorted(sol[1]))}, "
+              f"{categorize_puzzle(tuple(sorted(sol[1])))}")
     plt.show(block=False)
 
 
@@ -965,24 +890,13 @@ def subplot_puzzles(puzzles=None, solutions=None, filename=None, grid_shape=None
     :param grid_shape: Form des Gitters für die Subplots (z.B. (2, 3) für 2 Zeilen und 3 Spalten)
     """
 
-    #
-    # def parse_line(line):
-    #     """Parst eine einzelne Zeile der Textdatei in eine strukturierte Lösung."""
-    #     elements = line.strip()[1:-1].split("], [")
-    #     parsed_elements = [
-    #         list(map(int, elements[0][1:].split(", "))),
-    #         elements[1][1:-1].split("', '"),
-    #         list(map(int, elements[2][0:-1].split(", ")))
-    #     ]
-    #     return parsed_elements
-    #
     def read_sols(txt_filename=None):
         """Liest die Lösungen aus einer Datei."""
         if txt_filename is None:
             txt_filename = "solutions.txt"
         with open(txt_filename, 'r') as file:
             lines = file.readlines()
-        return [parse_line(line) for line in lines]
+        return [parse_sol(line) for line in lines]
 
     #
     if solutions is None:
@@ -1075,17 +989,6 @@ def get_puzzles(tile_combo, all_tiles=None):
     return output_tile_nums
 
 
-def getColor(tile, edge, orientation):
-    """
-    Die Farbe einer Kante eines Steins ausgeben als int mit definierter Codierung
-    :param tile: Codierung des Steins
-    :param edge: Kante des Steins
-    :param orientation: Rotation des Steins
-    :return: Farbcode
-    """
-    return int(tile[(edge + orientation) % 6])
-
-
 def gen_random_sol(n_tiles=7, kangaroo=1, sample=0, ascending=0, randomness=0, standard=0, all_tiles=None):
     """
     Funktion für die zufällige Generierung einer allgemeinen Lösung mit variabler Anzahl an Steinen
@@ -1164,7 +1067,6 @@ def gen_puzzle_from_sets(set_distribution):
 
 
 def gen_cand(curr, val=None, max_err=None, swap_and_rotate=1, swap_or_rotate=0,
-             # anzahl swaps, rotationen von temperatur abh, und relativer Richtigkeit?!!!!
              morphing=0, adapt_operations=0, max_swaps=None, max_rotations=None, err_edges=None):
     """
     Generiere einen Kandidaten für allgemeine Formen von Lösungen
@@ -1639,7 +1541,7 @@ def sa2(init_sol, n_iter, temp, restart_threshold=3000, max_restarts=5, focus_er
             # print("new temp")
             t = temperatures[temp_index]
             try:
-                exp_val = np.exp((max_obj - best_val) / max(t, 1e-10))
+                exp_val = np.exp((max_obj - best_val) / max(t, 1.0))
                 exp_val = min(exp_val, 1e10)  # Setze eine Obergrenze (z.B. 1e10)
                 steps_at_temp = min(max(int(exp_val), 1), 30)
             except OverflowError:
@@ -1842,7 +1744,7 @@ def sa3(init_sol, n_iter, temp, restart_threshold=3000, max_restarts=5, focus_er
             # print("new temp")
             t = temperatures[temp_index]
             try:
-                exp_val = np.exp((max_obj - best_val) / t)
+                exp_val = np.exp((max_obj - best_val) / max(t, 1.0))
                 exp_val = min(exp_val, 1e10)  # Setze eine Obergrenze (z.B. 1e10)
                 steps_at_temp = min(max(int(exp_val), 1), 30)
             except OverflowError:
@@ -2329,23 +2231,12 @@ def find_minimum_sols(attempts_to_search, attempts_to_solve, threshold, n_iter, 
         break
 
 
-# def parse_line(line):
-#     """Parst eine einzelne Zeile der Textdatei (string) in eine strukturierte Lösung."""
-#     elements = line.strip()[1:-1].split("], [")
-#     parsed_elements = [
-#         list(map(int, elements[0][1:].split(", "))),
-#         elements[1][1:-1].split("', '"),
-#         list(map(int, elements[2][0:-1].split(", ")))
-#     ]
-#     return parsed_elements
-
-
-def parse_sol(input):
+def parse_sol(solution):
     """Parst eine einzelne Zeile der Textdatei (string) in eine strukturierte Lösung."""
     output = None
-    if isinstance(input, str):
+    if isinstance(solution, str):
         try:
-            output = ast.literal_eval(input)
+            output = ast.literal_eval(solution)
         except (ValueError, SyntaxError):
             print("Ungültiges Format für das Puzzle-Argument.")
             output = None
@@ -2360,20 +2251,10 @@ def elim_ident(filename):
     :return: Keine.
     """
 
-    # def parse_line(line):
-    #     """Parses a single line of the text file into a structured solution."""
-    #     elements = line.strip()[1:-1].split("], [")
-    #     parsed_elements = [
-    #         list(map(int, elements[0][1:].split(", "))),
-    #         elements[1][1:-1].split("', '"),
-    #         list(map(int, elements[2][0:-1].split(", ")))
-    #     ]
-    #     return parsed_elements
-
     with open(filename, 'r') as file:
         lines = file.readlines()
 
-    sols = [parse_line(line) for line in lines]
+    sols = [parse_sol(line) for line in lines]
     sols = standardize_sols(sols)
     sols_uniq = []
     for sol in sols:
@@ -2383,18 +2264,6 @@ def elim_ident(filename):
     with open(filename, 'w') as file:
         for sol in sols_uniq:
             file.write(str(sol) + '\n')
-
-
-# def std(solution, standard=1):
-#     """Lösung einheitlich formatieren, Orientierung des mittleren Steins ist 0"""
-#     if not standard:
-#         temp_sol = copy.deepcopy(solution[1:])
-#     else:
-#         temp_sol = copy.deepcopy(solution)
-#     out = rotate_sol(temp_sol, n_rotations=6 - solution[-1][0])
-#     if not standard:
-#         out.insert(0, [*range(len(out[0]))])
-#     return out
 
 
 def find_sol_rand(runs, puzzle=None, conf=0.95):
@@ -2555,24 +2424,6 @@ def plot_probabilities(n1, n2, cutoff1, cutoff2, max_k1, max_k2):
     plt.legend()
     plt.grid(True)
     plt.show()
-
-
-# def examine_pairings(all_pairings):
-#     """Paarung(en) untersuchen"""
-#     results = [[] for _ in range(3)]
-#     used_puzzles = []
-#     sols_per_puzzle = read_num_sols_per_puzzle()
-#     for pairing in all_pairings:
-#         puzzles = get_puzzles(pairing)
-#         pindices = [all_puzzles.index(i) for i in puzzles]
-#         for p in pindices:
-#             if p not in used_puzzles:
-#                 used_puzzles.append(p)
-#         spp = [sols_per_puzzle[k] for k in pindices]
-#         results[0].append(min(spp))
-#         results[1].append(max(spp))
-#         results[2].append(np.var(spp))
-#     return results, len(used_puzzles)
 
 
 def bootstrap(sample, n_resamples=1000, conf=0.95, resample_size=None):
@@ -2783,36 +2634,6 @@ def calc_sum_types(type_combo):
     return tuple(res)
 
 
-# def plot_sols_distribution_with_normal(filename=None):
-#     """
-#     Plottet die relative Häufigkeit der eindeutigen Werte aus `sols_per_puzzle` (Anzahl Lösungen)
-#     und eine Normalverteilungsdichtefunktion.
-#     """
-#     sols_per_puzzle = read_num_sols_per_puzzle(filename)
-#     sn = count_elt_freq(sols_per_puzzle)
-#     # Berechnung von Mittelwert und Standardabweichung
-#     mean = np.mean(sols_per_puzzle)
-#     std_dev = np.std(sols_per_puzzle)
-#     # Berechnung der relativen Häufigkeiten
-#     total = len(sols_per_puzzle)
-#     rel_freq = {k: v / total for k, v in sn.items()}
-#     # Erstellen der x-Werte für den Normalverteilungsplot
-#     x_values = np.linspace(min(sols_per_puzzle), max(sols_per_puzzle), 100)
-#     normal_distribution = norm.pdf(x_values, mean, std_dev)
-#     # Plotten der relativen Häufigkeitsverteilung
-#     plt.figure(figsize=(10, 6))
-#     plt.bar(rel_freq.keys(), rel_freq.values(), width=0.9, alpha=0.6, label='Relative Häufigkeit der Lösungssumme')
-#     # Plotten der Normalverteilungsdichtefunktion
-#     plt.plot(x_values, normal_distribution, color='red', label='Normalverteilungsdichtefunktion')
-#     # Achsenbeschriftungen und Titel
-#     plt.xlabel('Werte')
-#     plt.ylabel('Relative Häufigkeit / Dichte')
-#     plt.title('Verteilung der Lösungsanzahl mit Normalverteilungsdichtefunktion')
-#     plt.legend()
-#     # Plot anzeigen
-#     plt.show(block=False)
-
-
 def get_puzzle_sols(puzzle, filename=None, sols_per_puzzle=None):
     """Anzahl Lösungen eines Puzzles ausgeben"""
     if sols_per_puzzle is None:
@@ -2840,46 +2661,9 @@ def gen_classes():
         """Funktion zum Spiegeln eines Steins (Reihenfolge umkehren)"""
         return tile[::-1]
 
-    #
-    #
-    # def sort_sol(tile):  # TESTEN!!!
-    #     """
-    #     Stein-codierung richtig verschieben
-    #     :param tile: Codierung eines Steins
-    #     :return: korrekte Codierung
-    #     """
-    #     for j in range(1, 4):
-    #         distance, index = get_dist(tile, j)
-    #         # if 0 < distance < 3:
-    #         #     tile = shift_tile(tile, index)
-    #         #     break
-    #         if distance in [1, 2, 4, 5]:
-    #             if distance < 4:
-    #                 tile = shift_tile(tile, index)
-    #             else:
-    #                 tile = shift_tile(tile, index + distance)
-    #             break
-    #     return tile
-
     def apply_permutation(tile, perm):
         """Funktion zum Anwenden einer Farbpermutation auf einen Stein"""
         return ''.join(perm[int(color) - 1] for color in tile)
-
-    # def generate_equivalent_tiles(tile):
-    #     """Funktion zum Generieren aller äquivalenten Steine eines gegebenen Steins"""
-    #     equivalent_tiles = set()
-    #     for perm in perms:
-    #         # Ursprünglicher Stein
-    #         permuted_tile = apply_permutation(tile, perm)
-    #         sorted_tile = sort_sol(permuted_tile)  # Sortiere den Stein
-    #         sorted_tile = ''.join(sorted_tile)  # Join zurück zu einem String
-    #         equivalent_tiles.add(sorted_tile)
-    #         # Gespiegelter Stein
-    #         mirrored_tile = mirror(permuted_tile)
-    #         sorted_mirrored_tile = sort_sol(mirrored_tile)  # Sortiere den Stein
-    #         sorted_mirrored_tile = ''.join(sorted_mirrored_tile)  # Join zurück zu einem String
-    #         equivalent_tiles.add(sorted_mirrored_tile)
-    #     return equivalent_tiles
 
     def generate_equivalent_puzzles(pz):
         """Funktion zum Generieren aller äquivalenten Puzzles"""
