@@ -1213,7 +1213,7 @@ def gen_cand(curr, val=None, max_err=None, swap_and_rotate=1, swap_or_rotate=0,
         cand[1][swap] = swap_tiles_perm[j]
         cand[2][swap] = tiles_copy[swap_indices_permutation[j]]
     # print(f"Anzahl der Vertauschungen/Rotationen: {n_swaps}, {n_rotations}")
-    if standard:
+    if standard and not morphing:
         return cand[1:]
     return cand
 
@@ -1828,6 +1828,9 @@ def plot_p_over_steps(data, standard=0):
                         s=0.2, color=col)
         legend_labels = []
         for errors, color_code in colors.items():
+            if errors == '0':
+                legend_labels.append(f"≤{errors}: {color_code}")
+                continue
             legend_labels.append(f'{errors}: {color_code}')
         lgnd = plt.legend(legend_labels, loc='upper right', title="diff: color")
         for handle in lgnd.legend_handles:
@@ -2843,14 +2846,14 @@ def main():
     steps = 25000
 
     # Simulated annealing mit Blumenpuzzle
-    # opt_sol, opt_val, datastream = simulated_annealing(rand_sol, 5000, temp=500, morphy=0, adapt_operations=0)
+    # opt_sol, opt_val, datastream = simulated_annealing(blue_rainbow, 10000, temp=500, morphy=0, adapt_operations=1)
     # draw_sol(opt_sol)
     # print(f"Fehleranzahl der besten Lösung: {opt_val}")
     # # print(opt_sol)
     # print_best_sols(datastream)
     # # plot_t_over_steps(datastream)
-    # plot_p_over_steps(datastream, 1)
-    # # plot_val_over_steps(datastream)
+    # # plot_p_over_steps(datastream, 1)
+    # plot_val_over_steps(datastream)
     # plot_cand_curr_over_steps(datastream)
     # # random_sol_mean(steps, 7, tiles, all_puzzles[0])
 
@@ -2896,7 +2899,7 @@ def main():
     print_best_sols(data)
     plot_cand_curr_over_steps(data)
     plot_val_over_steps(data)
-    plot_p_over_steps(data, 0)
+    # plot_p_over_steps(data, 0)
     # plot_t_over_steps(data)
     # print(get_longest_connection(solo))
 

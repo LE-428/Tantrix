@@ -648,7 +648,7 @@ def gen_cand(curr, val=None, max_err=None, swap_and_rotate=1, swap_or_rotate=0,
         cand[1][swap] = swap_tiles_perm[j]
         cand[2][swap] = tiles_copy[swap_indices_permutation[j]]
     # print(f"Anzahl der Vertauschungen/Rotationen: {n_swaps}, {n_rotations}")
-    if standard:
+    if standard and not morphing:
         return cand[1:]
     return cand
 
@@ -813,6 +813,9 @@ def calc_acceptance(diff, temp):
     :return: Wahrscheinlichkeit p, ist 1, falls diff = 0, also wird bei keiner Verbesserung trotzdem zu dem neuen
              Kandidaten gewechselt
     """
+    # if diff == 0:
+    #     return 0  # Experiment
+    #     # print("accepted equal sol")
     prob = np.exp(- diff / temp)
     return prob
 
@@ -848,16 +851,18 @@ def sa3(init_sol, n_iter=10000, temp=10, restart_threshold=3000, max_restarts=0,
             [8] Kandidat (cand_sol)
             [9] Differenz (diff = cand_val - curr_val)
     """
-    if len(init_sol) == 1:  # nur Puzzle angeben als [(puzzle)]
+    if len(init_sol) == 1:  # nur Puzzle angeben als [(Fliesen)]
         init_sol = gen_start_sol(init_sol[0])
-    elif len(init_sol) == 2:  # Puzzle mit Feldern angeben als [(Felder), (puzzle)]
+    elif len(init_sol) == 2:  # Puzzle mit Feldern angeben als [(Felder), (Fliesen)]
         init_sol = gen_start_sol(init_sol[1], fields=init_sol[0])
+    elif len(init_sol) == 3 and type(init_sol[-2][0]) != str:  # [(Felder), (Fliesen), (Orientierungen)]
+        init_sol.insert(2, [tiles_complete[idx] for idx in init_sol[1]])
     if obj(init_sol) == 0:
         return [init_sol, obj(init_sol), [[0] * n_iter for _ in range(10)]]
     temperatures = [get_temp(temp, k, cooling=cool_f) for k in range(n_iter)]
     data = []
     if write_data:
-        data = [[0] * n_iter for _ in range(10)]
+        data = [[0] * n_iter for _ in range(11)]
         data[0] = [*range(n_iter)]
     best_sol = copy.deepcopy(init_sol)  # beste Lösung, wird am Schluss ausgegeben
     focus_obj = len(init_sol[0])
@@ -903,6 +908,7 @@ def sa3(init_sol, n_iter=10000, temp=10, restart_threshold=3000, max_restarts=0,
     obj_tiles = None
     if focus_color is not None:
         focus_mode = 1
+    accepted_moves = 0
     for i in range(n_iter):  # ######### Schleife ab HIER ##########
         if focus_color is not None:
             if focus_obj == 0 and objective == 0:
@@ -968,6 +974,7 @@ def sa3(init_sol, n_iter=10000, temp=10, restart_threshold=3000, max_restarts=0,
                 # print(f"{cand_sol} ### {best_combined}")
         else:
             if cand_val - best_val < 0:
+                accepted_moves += 1
                 best_sol, best_val = cand_sol, cand_val
                 restart_best_val = best_val
                 failed_steps = 0
@@ -988,11 +995,15 @@ def sa3(init_sol, n_iter=10000, temp=10, restart_threshold=3000, max_restarts=0,
         steps_at_temp -= 1
         temp_index += 1
         # p = 0
+        # t = temperatures[(i // 1000) * 1000]  # Temperatur alle 1000 Schritte anpassen
         if diff < 0:
             p = 1
+        # if diff == 0:  # gleichwertige Kandidaten nicht akzeptieren (verstärkt lokale Suche?)
+        #     p = 0
         else:
             p = calc_acceptance(diff, t)
         if np.random.rand() < p:
+            accepted_moves += 1  # monitor the accepted moves
             curr_sol, curr_val = cand_sol, cand_val
             curr_err_edges = cand_err_edges
             # failed_steps = 0
@@ -1023,7 +1034,7 @@ def sa3(init_sol, n_iter=10000, temp=10, restart_threshold=3000, max_restarts=0,
             data[7][i] = cand_val
             data[8][i] = cand_sol
             data[9][i] = diff
-            # data[10][i] = best_combined
+            data[10][i] = accepted_moves
     if print_params:
         print(f"n_iter: {n_iter} \n"
               f"temp: {temp} \n"
@@ -1033,7 +1044,8 @@ def sa3(init_sol, n_iter=10000, temp=10, restart_threshold=3000, max_restarts=0,
               f"focus_color: {focus_color} \n"
               f"adapt_operations: {bool(adapt_operations)} \n"
               f"cool_f: {cool_f} \n"
-              f"morphing: {bool(morphy)}")
+              f"morphing: {bool(morphy)} \n"
+              f"accepted_moves: {accepted_moves}")
     return [best_sol, best_val, data]
 
 
@@ -1063,6 +1075,9 @@ def plot_p_over_steps(data, standard=0):
                         s=0.2, color=col)
         legend_labels = []
         for errors, color_code in colors.items():
+            if errors == '0':
+                legend_labels.append(f"≤{errors}: {color_code}")
+                continue
             legend_labels.append(f'{errors}: {color_code}')
         lgnd = plt.legend(legend_labels, loc='upper right', title="diff: color")
         for handle in lgnd.legend_handles:
@@ -1070,7 +1085,7 @@ def plot_p_over_steps(data, standard=0):
     else:
         plt.scatter(data[0], data[2], s=0.2)
     plt.xlabel('Iteration')
-    plt.ylabel('Acceptance probability')
+    plt.ylabel('Annahmewahrscheinlichkeit')
     plt.title("p in Abhängigkeit von Fehlerdiff. "
               "zw. Kandidaten und aktueller Lösung")
     plt.show()
@@ -1136,6 +1151,19 @@ def plot_cand_curr_over_steps(data):
     axis[1].set_ylim(0, max(data[7]))
 
     plt.title(datetime.datetime.now().time())
+    plt.show()
+
+
+def plot_accepted_over_steps(data):
+    """
+        Anzahl angenommener Lösungen plotten
+        :param data: simulated annealing data
+        :return:
+    """
+    plt.plot(data[0], data[10])
+    plt.xlabel('Iteration')
+    plt.ylabel('Accepted Moves')
+    # plt.legend()
     plt.show()
 
 
@@ -1222,6 +1250,7 @@ def main():
         plot_cand_curr_over_steps(data)
         plot_val_over_steps(data)
         plot_p_over_steps(data, 0)
+        plot_accepted_over_steps(data)
 
 
 if __name__ == "__main__":
